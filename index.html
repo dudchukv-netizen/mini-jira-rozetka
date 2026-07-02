@@ -982,11 +982,16 @@ function renderTeam(users) {
 
   const approvedBox = document.getElementById('approved-list');
   approvedBox.innerHTML = approved.length === 0 ? '<div class="empty-note">Поки що нікого немає</div>' :
-    approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span></div>').join('');
+    approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;align-items:center;gap:10px;"><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span>' + (u.id === (currentUser ? currentUser.uid : '') ? '' : '<button class="btn-delete" title="Видалити зі списку" onclick="deleteUserDoc(&quot;' + u.id + '&quot;)">✕</button>') + '</div></div>').join('');
 }
 
 async function approveUser(uid) { await usersRef.doc(uid).update({ approved: true, rejected: false }); }
 async function rejectUser(uid) { await usersRef.doc(uid).update({ approved: false, rejected: true }); }
+async function deleteUserDoc(uid) {
+  if (currentUser && uid === currentUser.uid) { alert('Не можна видалити власний акаунт звідси.'); return; }
+  if (!confirm('Видалити цього користувача зі списку? Доступ до системи зникне одразу. Сам обліковий запис для входу (Firebase Authentication) при цьому лишиться — його можна прибрати окремо в консолі Firebase.')) return;
+  await usersRef.doc(uid).delete();
+}
 </script>
 </body>
 </html>
