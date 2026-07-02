@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пункт задач</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+<style>
+  :root {
+    --sidebar-bg: #1B2430;
+    --sidebar-text: #9AA4B2;
+    --sidebar-text-active: #FFFFFF;
+    --sidebar-active-bg: #2A3542;
+    --content-bg: #F2F3F5;
+    --card-bg: #FFFFFF;
+    --ink: #1B2430;
+    --muted: #6B7280;
+    --border: #E3E5E9;
+    --accent: #C98A2E;
+    --red: #B4482F;
+    --green: #5C7A52;
+    --blue: #3B6EA8;
+  }
+  html[data-theme="dark"] {
+    --sidebar-bg: #10151C;
+    --sidebar-active-bg: #1E2733;
+    --content-bg: #14181F;
+    --card-bg: #1E242D;
+    --ink: #E7E9EC;
+    --muted: #9199A6;
+    --border: #2B3239;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--content-bg);
+    color: var(--ink);
+  }
+  .hidden { display: none !important; }
+
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 240px; flex-shrink: 0; background: var(--sidebar-bg); color: var(--sidebar-text);
+    display: flex; flex-direction: column; padding: 20px 14px; position: sticky; top: 0; height: 100vh;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 0 8px 24px; }
+  .brand-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .brand-title { font-size: 14.5px; font-weight: 800; color: #fff; line-height: 1.2; }
+  .brand-sub { font-size: 11px; color: var(--sidebar-text); }
+
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+    padding: 10px 12px; border-radius: 8px; border: none; background: transparent;
+    color: var(--sidebar-text); font-size: 13.5px; font-weight: 600; cursor: pointer; margin-bottom: 2px;
+  }
+  .nav-item .ic { font-size: 15px; }
+  .nav-item:hover { background: var(--sidebar-active-bg); }
+  .nav-item.active { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
+
+  .sidebar-spacer { flex: 1; }
+  .sidebar-bottom { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; }
+  .user-block { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
+  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; }
+  .user-name { font-size: 13px; font-weight: 700; color: #fff; }
+  .user-role { font-size: 11px; color: var(--sidebar-text); }
+
+  .theme-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font-size: 12.5px; font-weight: 600; }
+  .switch { position: relative; width: 38px; height: 20px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .slider { position: absolute; cursor: pointer; inset: 0; background: #3A4451; border-radius: 20px; transition: 0.2s; }
+  .slider::before { content: ""; position: absolute; height: 15px; width: 15px; left: 2.5px; bottom: 2.5px; background: white; border-radius: 50%; transition: 0.2s; }
+  input:checked + .slider { background: var(--accent); }
+  input:checked + .slider::before { transform: translateX(18px); }
+
+  .content { flex: 1; padding: 28px 32px 60px; max-width: 1180px; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .page-title { font-size: 24px; font-weight: 900; margin: 0 0 4px; }
+  .page-sub { font-size: 13.5px; color: var(--muted); margin: 0 0 24px; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; margin-bottom: 28px; }
+  .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; }
+  .stat-num { font-size: 26px; font-weight: 900; }
+  .stat-label { font-size: 12px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+
+  .section-block { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 20px; }
+  .section-block h3 { font-size: 14px; font-weight: 800; margin: 0 0 14px; }
+
+  .group-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 22px 0 10px; }
+  .group-title:first-of-type { margin-top: 4px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 16px;
+    display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+    transition: border-color 0.15s, transform 0.1s;
+  }
+  .tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .tile-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+  .tile-label { font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+
+  .form-panel { max-width: 480px; }
+  .selected-cat-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; }
+  .selected-cat-banner .tile-icon { width: 32px; height: 32px; font-size: 15px; }
+  label.field-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-top: 16px; }
+  input[type="text"], textarea {
+    width: 100%; padding: 11px 12px; margin: 6px 0 0; border: 1.5px solid var(--border);
+    border-radius: 6px; font-size: 14px; background: var(--content-bg); color: var(--ink); font-family: inherit;
+  }
+  textarea { resize: vertical; }
+  .urgent-row { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; margin: 18px 0 0; cursor: pointer; }
+  .btn-primary {
+    padding: 12px 20px; border-radius: 7px; border: none; background: var(--ink); color: var(--card-bg);
+    font-size: 14.5px; font-weight: 700; cursor: pointer;
+  }
+  html[data-theme="dark"] .btn-primary { background: var(--accent); color: #14181F; }
+  .btn-ghost { padding: 12px 16px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .btn-submit-row { display: flex; gap: 10px; margin-top: 22px; }
+  .btn-submit-row .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .success-box { margin-top: 14px; padding: 12px 14px; background: var(--green); color: #fff; border-radius: 7px; font-size: 13.5px; font-weight: 600; }
+  .error-box { color: var(--red); font-size: 13px; margin-top: 12px; }
+
+  .filter-row { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; flex-wrap: wrap; }
+  .chip {
+    font-size: 12px; font-weight: 700; padding: 6px 12px; border-radius: 20px;
+    border: 1.5px solid var(--border); background: var(--card-bg); color: var(--ink); cursor: pointer;
+  }
+  .chip.active { color: #fff; border-color: transparent; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+  .col-title { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .empty-note { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 8px 0; }
+
+  .task-card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+  .task-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .cat-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.03em; color: #fff; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
+  .urgent-flag { display: flex; align-items: center; gap: 4px; color: var(--red); font-size: 11px; font-weight: 700; }
+  .task-text { margin: 10px 0 8px; font-size: 14px; line-height: 1.45; color: var(--ink); font-weight: 500; }
+  .task-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); }
+  .task-actions { display: flex; gap: 8px; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .btn-cycle { flex: 1; font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 6px; border: 1.5px solid var(--ink); background: var(--ink); color: var(--card-bg); cursor: pointer; }
+  html[data-theme="dark"] .btn-cycle { border-color: var(--accent); background: var(--accent); color: #14181F; }
+  .btn-cycle.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .btn-delete { padding: 7px 10px; border-radius: 6px; border: 1.5px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
+
+  .mini-list .task-card { margin-bottom: 8px; }
+
+  .help-text { font-size: 14px; line-height: 1.7; color: var(--ink); max-width: 620px; }
+  .help-text b { font-weight: 800; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">📋</div>
+      <div>
+        <div class="brand-title">Пункт задач</div>
+        <div class="brand-sub">Внутрішній сервіс</div>
+      </div>
+    </div>
+
+    <button class="nav-item active" data-view="dashboard"><span class="ic">🏠</span> Дашборд</button>
+    <button class="nav-item" data-view="create"><span class="ic">➕</span> Створити заявку</button>
+    <button class="nav-item" data-view="board"><span class="ic">📋</span> Всі заявки</button>
+    <button class="nav-item" data-view="help"><span class="ic">❓</span> Довідка</button>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-bottom">
+      <div class="user-block">
+        <div class="user-avatar">К</div>
+        <div>
+          <div class="user-name">Керівник магазину</div>
+          <div class="user-role">Адмін-панель</div>
+        </div>
+      </div>
+      <div class="theme-row">
+        <span>Темна тема</span>
+        <label class="switch">
+          <input type="checkbox" id="theme-switch">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+  </aside>
+
+  <main class="content">
+
+    <section id="view-dashboard" class="view active">
+      <h1 class="page-title">Дашборд</h1>
+      <p class="page-sub">Загальний стан заявок</p>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <div class="section-block">
+        <h3>Останні заявки</h3>
+        <div class="mini-list" id="recent-list"></div>
+      </div>
+    </section>
+
+    <section id="view-create" class="view">
+      <h1 class="page-title">Створити заявку</h1>
+      <p class="page-sub">Обери категорію, яка найкраще описує запит</p>
+
+      <div id="tile-area"></div>
+
+      <div id="form-area" class="form-panel hidden">
+        <button class="btn-ghost" id="btn-change-cat" style="margin-bottom:16px;">← Обрати іншу категорію</button>
+        <div class="selected-cat-banner" id="selected-cat-banner"></div>
+
+        <label class="field-label">Твоє ім'я</label>
+        <input type="text" id="inp-name" placeholder="Наприклад, Олена">
+
+        <label class="field-label">Опис</label>
+        <textarea id="inp-text" rows="4" placeholder="Коротко, у чому суть запиту"></textarea>
+
+        <label class="urgent-row">
+          <input type="checkbox" id="inp-urgent"> Це термінове
+        </label>
+
+        <div id="emp-error" class="error-box hidden"></div>
+
+        <div class="btn-submit-row">
+          <button class="btn-primary" id="btn-submit" onclick="submitTask()">Надіслати заявку</button>
+        </div>
+        <div id="emp-success" class="success-box hidden">Заявку надіслано ✓</div>
+      </div>
+    </section>
+
+    <section id="view-board" class="view">
+      <h1 class="page-title">Всі заявки</h1>
+      <p class="page-sub">Керування статусами</p>
+
+      <div class="filter-row" id="filter-row"></div>
+      <div id="mgr-error" class="error-box hidden"></div>
+      <div class="columns" id="columns"></div>
+    </section>
+
+    <section id="view-help" class="view">
+      <h1 class="page-title">Довідка</h1>
+      <p class="page-sub">Як користуватись сервісом</p>
+      <div class="help-text">
+        <p><b>Створити заявку</b> — обери категорію, яка найточніше описує запит, заповни коротко суть і натисни "Надіслати". Заявка одразу з'явиться на дошці.</p>
+        <p><b>Всі заявки</b> — тут видно всі заявки, розподілені по статусах: Нова → В роботі → Виконано. Натискаючи на кнопку статусу, керівник переміщує заявку далі.</p>
+        <p><b>Термінові заявки</b> позначай окремо — вони видно виділені в списку.</p>
+        <p>Якщо не знайшов підходящу категорію — обери "Інше" і опиши запит детальніше.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyB7_3qyLATAfc7Tezas45HtlrgYrP9jiIM",
+  authDomain: "mini-jira-rozetka.firebaseapp.com",
+  projectId: "mini-jira-rozetka",
+  storageBucket: "mini-jira-rozetka.firebasestorage.app",
+  messagingSenderId: "610504181492",
+  appId: "1:610504181492:web:86a8248dcf6e3c64c0c0a1"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const tasksRef = db.collection('tasks');
+
+const GROUPS = {
+  tech: "Технічне / магазин",
+  hr: "Кадрові питання",
+  growth: "Розвиток",
+  other: "Інше"
+};
+const CATEGORIES = [
+  { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧" },
+  { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻" },
+  { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺" },
+  { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️" },
+  { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄" },
+  { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️" },
+  { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚" },
+  { id: "training_service", label: "Навчання по послугах", group: "hr", color: "#6B5CB4", icon: "🎓" },
+  { id: "meeting", label: "Особиста зустріч", group: "hr", color: "#3B6EA8", icon: "🤝" },
+  { id: "leave", label: "Відпустка / лікарняний", group: "hr", color: "#7A8C5C", icon: "🌴" },
+  { id: "idea", label: "Ідея", group: "growth", color: "#C98A2E", icon: "💡" },
+  { id: "problem_client", label: "Проблемний клієнт", group: "growth", color: "#B4482F", icon: "⚠️" },
+  { id: "supplies", label: "Видаткові матеріали", group: "other", color: "#8A5CA8", icon: "📦" },
+  { id: "other", label: "Інше", group: "other", color: "#6B6B5E", icon: "❓" },
+];
+const STATUSES = [
+  { id: "new", label: "Нова" },
+  { id: "progress", label: "В роботі" },
+  { id: "done", label: "Виконано" },
+];
+
+let selectedCategory = null;
+let currentFilter = "all";
+let allTasks = [];
+let unsubscribeBoard = null;
+let unsubscribeDash = null;
+
+function catInfo(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
+
+function timeAgo(ts) {
+  const diff = Math.floor((Date.now() - ts) / 1000);
+  if (diff < 60) return "щойно";
+  if (diff < 3600) return Math.floor(diff / 60) + " хв тому";
+  if (diff < 86400) return Math.floor(diff / 3600) + " год тому";
+  return Math.floor(diff / 86400) + " дн тому";
+}
+
+const themeSwitch = document.getElementById('theme-switch');
+themeSwitch.addEventListener('change', () => {
+  document.documentElement.setAttribute('data-theme', themeSwitch.checked ? 'dark' : 'light');
+});
+
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+function switchView(view) {
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+
+  if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
+  if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
+
+  if (view === 'dashboard') startDashboard();
+  if (view === 'create') { renderTiles(); resetForm(); }
+  if (view === 'board') { renderFilterChips(); startBoard(); }
+}
+
+function renderTiles() {
+  const area = document.getElementById('tile-area');
+  area.innerHTML = '';
+  Object.keys(GROUPS).forEach(groupId => {
+    const groupCats = CATEGORIES.filter(c => c.group === groupId);
+    if (!groupCats.length) return;
+    const title = document.createElement('div');
+    title.className = 'group-title';
+    title.textContent = GROUPS[groupId];
+    area.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.className = 'tile-grid';
+    groupCats.forEach(c => {
+      const tile = document.createElement('button');
+      tile.className = 'tile';
+      tile.innerHTML = '<div class="tile-icon" style="background:' + c.color + '22;color:' + c.color + ';">' + c.icon + '</div><div class="tile-label">' + c.label + '</div>';
+      tile.onclick = () => selectCategory(c.id);
+      grid.appendChild(tile);
+    });
+    area.appendChild(grid);
+  });
+}
+
+function selectCategory(id) {
+  selectedCategory = id;
+  const c = catInfo(id);
+  document.getElementById('tile-area').classList.add('hidden');
+  document.getElementById('form-area').classList.remove('hidden');
+  const banner = document.getElementById('selected-cat-banner');
+  banner.style.background = c.color + '18';
+  banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div style="font-weight:800;color:' + c.color + ';">' + c.label + '</div>';
+}
+
+document.getElementById('btn-change-cat').onclick = () => {
+  document.getElementById('tile-area').classList.remove('hidden');
+  document.getElementById('form-area').classList.add('hidden');
+  selectedCategory = null;
+};
+
+function resetForm() {
+  document.getElementById('tile-area').classList.remove('hidden');
+  document.getElementById('form-area').classList.add('hidden');
+  document.getElementById('inp-name').value = '';
+  document.getElementById('inp-text').value = '';
+  document.getElementById('inp-urgent').checked = false;
+  document.getElementById('emp-error').classList.add('hidden');
+  document.getElementById('emp-success').classList.add('hidden');
+  selectedCategory = null;
+}
+
+async function submitTask() {
+  const name = document.getElementById('inp-name').value.trim();
+  const text = document.getElementById('inp-text').value.trim();
+  const urgent = document.getElementById('inp-urgent').checked;
+  const errBox = document.getElementById('emp-error');
+  const btn = document.getElementById('btn-submit');
+  errBox.classList.add('hidden');
+
+  if (!name || !text || !selectedCategory) {
+    errBox.textContent = "Заповни ім'я і опис заявки.";
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = "Надсилаю...";
+
+  try {
+    await tasksRef.add({
+      author: name,
+      category: selectedCategory,
+      priority: urgent ? "urgent" : "normal",
+      text: text,
+      status: "new",
+      createdAt: Date.now()
+    });
+    document.getElementById('emp-success').classList.remove('hidden');
+    setTimeout(() => { resetForm(); }, 1800);
+  } catch (e) {
+    errBox.textContent = "Не вдалося надіслати. Перевір інтернет і спробуй ще раз.";
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Надіслати заявку";
+  }
+}
+
+function startDashboard() {
+  unsubscribeDash = tasksRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+    const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    renderDashboard(tasks);
+  });
+}
+
+function renderDashboard(tasks) {
+  const counts = { new: 0, progress: 0, done: 0, urgent: 0 };
+  tasks.forEach(t => {
+    if (counts[t.status] !== undefined) counts[t.status]++;
+    if (t.priority === 'urgent') counts.urgent++;
+  });
+
+  const grid = document.getElementById('stats-grid');
+  grid.innerHTML = '';
+  const cards = [
+    { label: 'Всього заявок', num: tasks.length },
+    { label: 'Нові', num: counts.new },
+    { label: 'В роботі', num: counts.progress },
+    { label: 'Виконано', num: counts.done },
+    { label: 'Термінові', num: counts.urgent },
+  ];
+  cards.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'stat-card';
+    div.innerHTML = '<div class="stat-num">' + c.num + '</div><div class="stat-label">' + c.label + '</div>';
+    grid.appendChild(div);
+  });
+
+  const recentList = document.getElementById('recent-list');
+  recentList.innerHTML = '';
+  if (tasks.length === 0) {
+    recentList.innerHTML = '<div class="empty-note">Поки що немає заявок</div>';
+  } else {
+    tasks.slice(0, 5).forEach(t => recentList.appendChild(renderCard(t, false)));
+  }
+}
+
+function renderFilterChips() {
+  const box = document.getElementById('filter-row');
+  box.innerHTML = '';
+  const allBtn = document.createElement('button');
+  allBtn.className = 'chip' + (currentFilter === 'all' ? ' active' : '');
+  allBtn.textContent = 'Усі';
+  allBtn.style.background = currentFilter === 'all' ? '#1B2430' : '';
+  allBtn.onclick = () => { currentFilter = 'all'; renderFilterChips(); renderBoard(); };
+  box.appendChild(allBtn);
+
+  CATEGORIES.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (currentFilter === c.id ? ' active' : '');
+    btn.textContent = c.icon + ' ' + c.label;
+    btn.style.background = currentFilter === c.id ? c.color : '';
+    btn.onclick = () => { currentFilter = c.id; renderFilterChips(); renderBoard(); };
+    box.appendChild(btn);
+  });
+}
+
+function startBoard() {
+  const errBox = document.getElementById('mgr-error');
+  errBox.classList.add('hidden');
+  unsubscribeBoard = tasksRef.orderBy('createdAt', 'desc').onSnapshot(
+    snapshot => {
+      allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      renderBoard();
+    },
+    err => {
+      errBox.textContent = "Не вдалося завантажити заявки: " + err.message;
+      errBox.classList.remove('hidden');
+    }
+  );
+}
+
+async function cycleStatus(id) {
+  const task = allTasks.find(t => t.id === id);
+  if (!task) return;
+  const idx = STATUSES.findIndex(s => s.id === task.status);
+  const next = STATUSES[Math.min(idx + 1, STATUSES.length - 1)].id;
+  try { await tasksRef.doc(id).update({ status: next }); }
+  catch (e) {
+    document.getElementById('mgr-error').textContent = "Не вдалося оновити статус.";
+    document.getElementById('mgr-error').classList.remove('hidden');
+  }
+}
+
+async function deleteTask(id) {
+  try { await tasksRef.doc(id).delete(); }
+  catch (e) {
+    document.getElementById('mgr-error').textContent = "Не вдалося видалити заявку.";
+    document.getElementById('mgr-error').classList.remove('hidden');
+  }
+}
+
+function renderBoard() {
+  const visible = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.category === currentFilter);
+  const columns = document.getElementById('columns');
+  columns.innerHTML = '';
+  STATUSES.forEach(s => {
+    const colTasks = visible.filter(t => t.status === s.id).sort((a, b) => b.createdAt - a.createdAt);
+    const col = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'col-title';
+    title.textContent = s.label + ' (' + colTasks.length + ')';
+    col.appendChild(title);
+    if (colTasks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-note';
+      empty.textContent = 'Порожньо';
+      col.appendChild(empty);
+    }
+    colTasks.forEach(t => col.appendChild(renderCard(t, true)));
+    columns.appendChild(col);
+  });
+}
+
+function renderCard(task, withActions) {
+  const cat = catInfo(task.category);
+  const statusIdx = STATUSES.findIndex(s => s.id === task.status);
+  const card = document.createElement('div');
+  card.className = 'task-card';
+
+  const top = document.createElement('div');
+  top.className = 'task-top';
+  const badge = document.createElement('span');
+  badge.className = 'cat-badge';
+  badge.textContent = cat.icon + ' ' + cat.label;
+  badge.style.background = cat.color;
+  top.appendChild(badge);
+  if (task.priority === 'urgent') {
+    const flag = document.createElement('span');
+    flag.className = 'urgent-flag';
+    flag.textContent = '⚠ ТЕРМІНОВО';
+    top.appendChild(flag);
+  }
+  card.appendChild(top);
+
+  const text = document.createElement('p');
+  text.className = 'task-text';
+  text.textContent = task.text;
+  card.appendChild(text);
+
+  const meta = document.createElement('div');
+  meta.className = 'task-meta';
+  meta.innerHTML = '<span>👤 ' + task.author + '</span><span>🕐 ' + timeAgo(task.createdAt) + '</span>';
+  card.appendChild(meta);
+
+  if (withActions) {
+    const actions = document.createElement('div');
+    actions.className = 'task-actions';
+    const cycleBtn = document.createElement('button');
+    cycleBtn.className = 'btn-cycle' + (statusIdx === 2 ? ' done' : '');
+    cycleBtn.textContent = statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
+    cycleBtn.onclick = () => cycleStatus(task.id);
+    actions.appendChild(cycleBtn);
+
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn-delete';
+    delBtn.textContent = '✕';
+    delBtn.title = 'Видалити';
+    delBtn.onclick = () => deleteTask(task.id);
+    actions.appendChild(delBtn);
+    card.appendChild(actions);
+  }
+
+  return card;
+}
+
+startDashboard();
+</script>
+</body>
+</html>
