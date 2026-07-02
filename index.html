@@ -7,6 +7,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
 <style>
   :root {
@@ -23,6 +24,7 @@
     --red: #B4482F;
     --green: #5C7A52;
     --blue: #3B6EA8;
+    --purple: #8A5CA8;
     --highlight-bg: #FBF1E3;
   }
   html[data-theme="dark"] {
@@ -44,6 +46,27 @@
   }
   .hidden { display: none !important; }
 
+  /* ---------- AUTH SCREENS ---------- */
+  .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .auth-box { max-width: 380px; width: 100%; background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 14px; padding: 32px 28px; }
+  .auth-eyebrow { font-size: 11px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; text-align: center; }
+  .auth-title { font-size: 20px; font-weight: 900; text-align: center; margin: 0 0 22px; }
+  .auth-tabs { display: flex; gap: 6px; background: var(--content-bg); border-radius: 8px; padding: 4px; margin-bottom: 20px; }
+  .auth-tab { flex: 1; padding: 8px; border: none; background: transparent; border-radius: 6px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .auth-tab.active { background: var(--card-bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .auth-field { margin-bottom: 14px; }
+  .auth-field label { font-size: 11.5px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-bottom: 5px; }
+  .auth-field input { width: 100%; padding: 11px 12px; border: 1.5px solid var(--border); border-radius: 7px; font-size: 14px; background: var(--content-bg); color: var(--ink); }
+  .auth-hint { font-size: 12px; color: var(--muted); text-align: center; margin-top: 14px; line-height: 1.5; }
+  .auth-error { color: var(--red); font-size: 12.5px; margin-top: 10px; text-align: center; }
+  .loading-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; }
+
+  .pending-box { max-width: 420px; width: 100%; background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 14px; padding: 36px 30px; text-align: center; }
+  .pending-icon { font-size: 40px; margin-bottom: 14px; }
+  .pending-title { font-size: 18px; font-weight: 900; margin: 0 0 8px; }
+  .pending-text { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin-bottom: 22px; }
+
+  /* ---------- APP LAYOUT ---------- */
   .app { display: flex; min-height: 100vh; }
 
   .sidebar {
@@ -63,13 +86,16 @@
   .nav-item .ic { font-size: 15px; }
   .nav-item:hover { background: var(--sidebar-active-bg); }
   .nav-item.active { background: var(--sidebar-active-bg); color: var(--sidebar-text-active); }
+  .nav-badge { margin-left: auto; background: var(--red); color: #fff; font-size: 10px; font-weight: 800; padding: 1px 6px; border-radius: 20px; }
 
   .sidebar-spacer { flex: 1; }
   .sidebar-bottom { border-top: 1px solid rgba(255,255,255,0.08); padding-top: 14px; }
   .user-block { display: flex; align-items: center; gap: 10px; padding: 4px 8px 14px; }
-  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; }
+  .user-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--accent); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; flex-shrink: 0; }
   .user-name { font-size: 13px; font-weight: 700; color: #fff; }
   .user-role { font-size: 11px; color: var(--sidebar-text); }
+  .btn-logout { width: 100%; text-align: left; background: none; border: none; color: var(--sidebar-text); font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 8px; border-radius: 6px; }
+  .btn-logout:hover { background: var(--sidebar-active-bg); color: #fff; }
 
   .theme-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font-size: 12.5px; font-weight: 600; }
   .switch { position: relative; width: 38px; height: 20px; }
@@ -113,7 +139,7 @@
   .selected-cat-title { font-weight: 800; font-size: 14.5px; }
   .selected-cat-hint { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; font-weight: 500; }
   label.field-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-top: 16px; }
-  input[type="text"], textarea {
+  input[type="text"], input[type="email"], input[type="password"], textarea {
     width: 100%; padding: 11px 12px; margin: 6px 0 0; border: 1.5px solid var(--border);
     border-radius: 6px; font-size: 14px; background: var(--content-bg); color: var(--ink); font-family: inherit;
   }
@@ -124,9 +150,10 @@
     font-size: 14.5px; font-weight: 700; cursor: pointer;
   }
   html[data-theme="dark"] .btn-primary { background: var(--accent); color: #14181F; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary.wide { width: 100%; }
   .btn-ghost { padding: 10px 14px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
   .btn-submit-row { display: flex; gap: 10px; margin-top: 22px; }
-  .btn-submit-row .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .success-box { margin-top: 14px; padding: 12px 14px; background: var(--green); color: #fff; border-radius: 7px; font-size: 13.5px; font-weight: 600; }
   .error-box { color: var(--red); font-size: 13px; margin-top: 12px; }
 
@@ -136,7 +163,7 @@
     border: 1.5px solid var(--border); background: var(--card-bg); color: var(--ink); cursor: pointer;
   }
   .chip.active { color: #fff; border-color: transparent; }
-  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
   .col-title { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .empty-note { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 8px 0; }
 
@@ -148,9 +175,7 @@
   .task-text { margin: 10px 0 8px; font-size: 14px; line-height: 1.45; color: var(--ink); font-weight: 500; }
   .task-meta { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--muted); }
   .task-actions { display: flex; gap: 8px; margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
-  .btn-cycle { flex: 1; font-size: 12px; font-weight: 700; padding: 7px 10px; border-radius: 6px; border: 1.5px solid var(--ink); background: var(--ink); color: var(--card-bg); cursor: pointer; }
-  html[data-theme="dark"] .btn-cycle { border-color: var(--accent); background: var(--accent); color: #14181F; }
-  .btn-cycle.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .status-select { flex: 1; font-size: 12px; font-weight: 700; padding: 7px 8px; border-radius: 6px; border: 1.5px solid var(--border); background: var(--content-bg); color: var(--ink); cursor: pointer; }
   .btn-delete { padding: 7px 10px; border-radius: 6px; border: 1.5px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; }
 
   .mini-list .task-card { margin-bottom: 8px; }
@@ -158,7 +183,7 @@
   .help-text { font-size: 14px; line-height: 1.7; color: var(--ink); max-width: 620px; }
   .help-text b { font-weight: 800; }
 
-  /* ---------- TICKET DETAIL PAGE ---------- */
+  /* ---------- TICKET DETAIL ---------- */
   .ticket-breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; font-weight: 600; }
   .ticket-breadcrumb a { color: var(--blue); cursor: pointer; text-decoration: none; }
   html[data-theme="dark"] .ticket-breadcrumb a { color: var(--accent); }
@@ -173,8 +198,7 @@
   .ticket-desc-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
 
   .comment-input-row { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
-  .comment-input-row input:first-child { flex: 0 0 140px; margin: 0; }
-  .comment-input-row input:nth-child(2) { flex: 1; min-width: 180px; margin: 0; }
+  .comment-input-row input { flex: 1; min-width: 180px; margin: 0; }
   .comment-input-row button { flex-shrink: 0; }
 
   .activity-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
@@ -191,7 +215,7 @@
   .activity-comment-text { font-size: 13.5px; margin-top: 4px; line-height: 1.45; }
   .latest-tag { font-size: 9.5px; font-weight: 800; color: var(--muted); background: var(--content-bg); padding: 2px 7px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 6px; }
 
-  .status-btn { width: 100%; border: none; border-radius: 8px; padding: 12px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: #fff; cursor: pointer; margin-bottom: 18px; }
+  .status-select-big { width: 100%; border: none; border-radius: 8px; padding: 12px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: #fff; cursor: pointer; margin-bottom: 18px; appearance: none; text-align: center; }
   .sidebar-block { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
   .sidebar-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .participant-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
@@ -201,11 +225,61 @@
   .detail-row:last-child { margin-bottom: 0; }
   .detail-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
   .detail-value { font-size: 13px; font-weight: 700; }
+
+  /* ---------- TEAM / APPROVALS ---------- */
+  .team-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: 8px; margin-bottom: 8px; background: var(--card-bg); }
+  .team-row-info { display: flex; align-items: center; gap: 10px; }
+  .team-row-name { font-weight: 700; font-size: 13.5px; }
+  .team-row-email { font-size: 11.5px; color: var(--muted); }
+  .btn-approve { padding: 7px 14px; border-radius: 6px; border: none; background: var(--green); color: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .btn-reject { padding: 7px 14px; border-radius: 6px; border: 1.5px solid var(--border); background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 700; cursor: pointer; }
+  .role-tag { font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 20px; background: var(--content-bg); color: var(--muted); text-transform: uppercase; }
 </style>
 </head>
 <body>
 
-<div class="app">
+<div id="loading-screen" class="loading-screen">Завантаження…</div>
+
+<!-- AUTH SCREEN -->
+<div id="auth-screen" class="auth-wrap hidden">
+  <div class="auth-box">
+    <div class="auth-eyebrow">Пункт задач</div>
+    <div class="auth-title">Вхід у систему</div>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tab-login" onclick="setAuthTab('login')">Увійти</button>
+      <button class="auth-tab" id="tab-register" onclick="setAuthTab('register')">Реєстрація</button>
+    </div>
+
+    <div id="form-login">
+      <div class="auth-field"><label>Email</label><input type="email" id="login-email"></div>
+      <div class="auth-field"><label>Пароль</label><input type="password" id="login-password"></div>
+      <button class="btn-primary wide" onclick="doLogin()" id="btn-login">Увійти</button>
+    </div>
+
+    <div id="form-register" class="hidden">
+      <div class="auth-field"><label>Ім'я</label><input type="text" id="reg-name" placeholder="Наприклад, Олена"></div>
+      <div class="auth-field"><label>Email</label><input type="email" id="reg-email"></div>
+      <div class="auth-field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Мінімум 6 символів"></div>
+      <button class="btn-primary wide" onclick="doRegister()" id="btn-register">Зареєструватись</button>
+      <div class="auth-hint">Перша людина, що зареєструється — стає керівником. Всі наступні очікують підтвердження.</div>
+    </div>
+
+    <div id="auth-error" class="auth-error hidden"></div>
+  </div>
+</div>
+
+<!-- PENDING APPROVAL SCREEN -->
+<div id="pending-screen" class="auth-wrap hidden">
+  <div class="pending-box">
+    <div class="pending-icon">⏳</div>
+    <div class="pending-title">Очікуємо підтвердження</div>
+    <div class="pending-text" id="pending-text">Твою заявку на реєстрацію передано керівнику. Щойно підтвердять — зможеш користуватись сервісом.</div>
+    <button class="btn-ghost" onclick="doLogout()">Вийти</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app-root" class="app hidden">
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-icon">📋</div>
@@ -215,19 +289,16 @@
       </div>
     </div>
 
-    <button class="nav-item active" data-view="dashboard"><span class="ic">🏠</span> Дашборд</button>
-    <button class="nav-item" data-view="create"><span class="ic">➕</span> Створити заявку</button>
-    <button class="nav-item" data-view="board"><span class="ic">📋</span> Всі заявки</button>
-    <button class="nav-item" data-view="help"><span class="ic">❓</span> Довідка</button>
+    <div id="nav-items"></div>
 
     <div class="sidebar-spacer"></div>
 
     <div class="sidebar-bottom">
       <div class="user-block">
-        <div class="user-avatar">К</div>
+        <div class="user-avatar" id="sidebar-avatar">?</div>
         <div>
-          <div class="user-name">Керівник магазину</div>
-          <div class="user-role">Адмін-панель</div>
+          <div class="user-name" id="sidebar-name">—</div>
+          <div class="user-role" id="sidebar-role">—</div>
         </div>
       </div>
       <div class="theme-row">
@@ -237,17 +308,16 @@
           <span class="slider"></span>
         </label>
       </div>
+      <button class="btn-logout" onclick="doLogout()">↪ Вийти</button>
     </div>
   </aside>
 
   <main class="content">
 
-    <section id="view-dashboard" class="view active">
+    <section id="view-dashboard" class="view">
       <h1 class="page-title">Дашборд</h1>
       <p class="page-sub">Загальний стан заявок</p>
-
       <div class="stats-grid" id="stats-grid"></div>
-
       <div class="section-block">
         <h3>Останні заявки</h3>
         <div class="mini-list" id="recent-list"></div>
@@ -257,85 +327,76 @@
     <section id="view-create" class="view">
       <h1 class="page-title">Створити заявку</h1>
       <p class="page-sub">Обери категорію, яка найкраще описує запит</p>
-
       <div id="tile-area"></div>
-
       <div id="form-area" class="form-panel hidden">
         <button class="btn-ghost" id="btn-change-cat" style="margin-bottom:16px;">← Обрати іншу категорію</button>
         <div class="selected-cat-banner" id="selected-cat-banner"></div>
-
-        <label class="field-label">Твоє ім'я</label>
-        <input type="text" id="inp-name" placeholder="Наприклад, Олена">
-
         <label class="field-label">Опис</label>
         <textarea id="inp-text" rows="4" placeholder="Коротко, у чому суть запиту"></textarea>
-
-        <label class="urgent-row">
-          <input type="checkbox" id="inp-urgent"> Це термінове
-        </label>
-
+        <label class="urgent-row"><input type="checkbox" id="inp-urgent"> Це термінове</label>
         <div id="emp-error" class="error-box hidden"></div>
-
-        <div class="btn-submit-row">
-          <button class="btn-primary" id="btn-submit" onclick="submitTask()">Надіслати заявку</button>
-        </div>
+        <div class="btn-submit-row"><button class="btn-primary" id="btn-submit" onclick="submitTask()">Надіслати заявку</button></div>
         <div id="emp-success" class="success-box hidden">Заявку надіслано ✓</div>
       </div>
     </section>
 
     <section id="view-board" class="view">
-      <h1 class="page-title">Всі заявки</h1>
+      <h1 class="page-title" id="board-title">Всі заявки</h1>
       <p class="page-sub">Клікни на заявку, щоб відкрити деталі та коментарі</p>
-
       <div class="filter-row" id="filter-row"></div>
       <div id="mgr-error" class="error-box hidden"></div>
       <div class="columns" id="columns"></div>
+    </section>
+
+    <section id="view-team" class="view">
+      <h1 class="page-title">Працівники</h1>
+      <p class="page-sub">Підтвердження реєстрацій та список команди</p>
+      <div class="section-block">
+        <h3>Очікують підтвердження</h3>
+        <div id="pending-list"></div>
+      </div>
+      <div class="section-block">
+        <h3>Підтверджені</h3>
+        <div id="approved-list"></div>
+      </div>
     </section>
 
     <section id="view-help" class="view">
       <h1 class="page-title">Довідка</h1>
       <p class="page-sub">Як користуватись сервісом</p>
       <div class="help-text">
-        <p><b>Створити заявку</b> — обери категорію, яка найточніше описує запит, заповни коротко суть і натисни "Надіслати". Заявка одразу з'явиться на дошці.</p>
-        <p><b>Відкриття заявки</b> — клік по заявці відкриває окрему сторінку з повною історією: зміни статусу і коментарі в одній стрічці, найновіше зверху.</p>
-        <p><b>Коментарі</b> — на сторінці заявки будь-хто може написати коментар, вказавши ім'я. Це бачать всі, хто відкриває заявку.</p>
-        <p>Якщо не знайшов підходящу категорію — обери "Інше" і опиши запит детальніше.</p>
+        <p><b>Створити заявку</b> — обери категорію, заповни опис і натисни "Надіслати". Ім'я підставляється автоматично з твого акаунту.</p>
+        <p><b>Відкриття заявки</b> — клік по заявці відкриває окрему сторінку з історією статусів і коментарів.</p>
+        <p><b>Статуси:</b> Нова → В роботі → Виконано, або Потребує уточнення / Відхилено — обираються напряму зі списку.</p>
       </div>
     </section>
 
     <section id="view-ticket" class="view">
-      <button class="btn-ghost" onclick="closeTicket()" style="margin-bottom:16px;">← Назад до заявок</button>
+      <button class="btn-ghost" onclick="closeTicket()" style="margin-bottom:16px;">← Назад</button>
       <div class="ticket-breadcrumb" id="ticket-breadcrumb"></div>
       <div class="ticket-title-row">
         <h1 class="ticket-title" id="ticket-title"></h1>
         <span class="ticket-id" id="ticket-id"></span>
       </div>
-
       <div class="ticket-layout">
         <div class="ticket-main">
           <div class="ticket-desc-box">
             <div class="ticket-desc-label">Опис заявки</div>
             <div id="ticket-desc-text"></div>
           </div>
-
           <div class="comment-input-row">
-            <input type="text" id="ticket-c-name" placeholder="Твоє ім'я">
             <input type="text" id="ticket-c-text" placeholder="Додати коментар..." onkeydown="if(event.key==='Enter'){submitTicketComment();}">
             <button class="btn-primary" onclick="submitTicketComment()">Надіслати</button>
           </div>
-
           <div class="activity-label">Активність</div>
           <div id="ticket-activity"></div>
         </div>
-
         <div class="ticket-sidebar">
-          <button class="status-btn" id="ticket-status-btn" onclick="cycleTicketStatus()"></button>
-
+          <select class="status-select-big" id="ticket-status-select" onchange="changeStatusTo(currentTicketId, this.value)"></select>
           <div class="sidebar-block">
             <div class="sidebar-label">Учасники заявки</div>
             <div id="ticket-participants"></div>
           </div>
-
           <div class="sidebar-block">
             <div class="sidebar-label">Подробиці</div>
             <div id="ticket-details"></div>
@@ -358,62 +419,48 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
 const tasksRef = db.collection('tasks');
+const usersRef = db.collection('users');
 
-const GROUPS = {
-  tech: "Технічне / магазин",
-  hr: "Кадрові питання",
-  growth: "Розвиток",
-  other: "Інше"
-};
+const GROUPS = { tech: "Технічне / магазин", hr: "Кадрові питання", growth: "Розвиток", other: "Інше" };
 const CATEGORIES = [
-  { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧",
-    hint: "Напишіть, яке обладнання зламалось і в чому проблема (каса, принтер, кондиціонер тощо)." },
-  { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻",
-    hint: "Опишіть проблему з комп'ютером, інтернетом чи програмами (1С, планшет, термінал тощо)." },
-  { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺",
-    hint: "Напишіть, які поломки чи проблеми у вас на магазині (вітрина, вивіска, освітлення тощо)." },
-  { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️",
-    hint: "Вкажіть, які матеріали потрібні: воблери, цінники, акційні POS-матеріали." },
-  { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄",
-    hint: "Вкажіть, в який магазин чи відділ хочете перевестись і коротко чому." },
-  { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️",
-    hint: "Опишіть, які зміни потрібні в графіку і на який період." },
-  { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚",
-    hint: "Опишіть, що саме не виходить чи чого хочете навчитись." },
-  { id: "training_service", label: "Навчання по послугах", group: "hr", color: "#6B5CB4", icon: "🎓",
-    hint: "Вкажіть, яка послуга цікавить і зручний час." },
-  { id: "meeting", label: "Особиста зустріч", group: "hr", color: "#3B6EA8", icon: "🤝",
-    hint: "Коротко напишіть тему зустрічі, щоб керівник підготувався." },
-  { id: "leave", label: "Відпустка / лікарняний", group: "hr", color: "#7A8C5C", icon: "🌴",
-    hint: "Вкажіть дати та причину." },
-  { id: "idea", label: "Ідея", group: "growth", color: "#C98A2E", icon: "💡",
-    hint: "Опишіть свою пропозицію, як покращити роботу магазину." },
-  { id: "problem_client", label: "Проблемний клієнт", group: "growth", color: "#B4482F", icon: "⚠️",
-    hint: "Опишіть ситуацію з клієнтом коротко і по суті." },
-  { id: "supplies", label: "Видаткові матеріали", group: "other", color: "#8A5CA8", icon: "📦",
-    hint: "Які матеріали закінчуються: пакети, чеки, канцелярія тощо." },
-  { id: "other", label: "Інше", group: "other", color: "#6B6B5E", icon: "❓",
-    hint: "Опишіть запит, якщо жодна категорія не підійшла." },
+  { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧", hint: "Напишіть, яке обладнання зламалось і в чому проблема (каса, принтер, кондиціонер тощо)." },
+  { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻", hint: "Опишіть проблему з комп'ютером, інтернетом чи програмами (1С, планшет, термінал тощо)." },
+  { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺", hint: "Напишіть, які поломки чи проблеми у вас на магазині (вітрина, вивіска, освітлення тощо)." },
+  { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️", hint: "Вкажіть, які матеріали потрібні: воблери, цінники, акційні POS-матеріали." },
+  { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄", hint: "Вкажіть, в який магазин чи відділ хочете перевестись і коротко чому." },
+  { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️", hint: "Опишіть, які зміни потрібні в графіку і на який період." },
+  { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚", hint: "Опишіть, що саме не виходить чи чого хочете навчитись." },
+  { id: "training_service", label: "Навчання по послугах", group: "hr", color: "#6B5CB4", icon: "🎓", hint: "Вкажіть, яка послуга цікавить і зручний час." },
+  { id: "meeting", label: "Особиста зустріч", group: "hr", color: "#3B6EA8", icon: "🤝", hint: "Коротко напишіть тему зустрічі, щоб керівник підготувався." },
+  { id: "leave", label: "Відпустка / лікарняний", group: "hr", color: "#7A8C5C", icon: "🌴", hint: "Вкажіть дати та причину." },
+  { id: "idea", label: "Ідея", group: "growth", color: "#C98A2E", icon: "💡", hint: "Опишіть свою пропозицію, як покращити роботу магазину." },
+  { id: "problem_client", label: "Проблемний клієнт", group: "growth", color: "#B4482F", icon: "⚠️", hint: "Опишіть ситуацію з клієнтом коротко і по суті." },
+  { id: "supplies", label: "Видаткові матеріали", group: "other", color: "#8A5CA8", icon: "📦", hint: "Які матеріали закінчуються: пакети, чеки, канцелярія тощо." },
+  { id: "other", label: "Інше", group: "other", color: "#6B6B5E", icon: "❓", hint: "Опишіть запит, якщо жодна категорія не підійшла." },
 ];
 const STATUSES = [
   { id: "new", label: "Нова", color: "#3B6EA8" },
   { id: "progress", label: "В роботі", color: "#C98A2E" },
+  { id: "waiting", label: "Потребує уточнення", color: "#8A5CA8" },
   { id: "done", label: "Виконано", color: "#5C7A52" },
+  { id: "rejected", label: "Відхилено", color: "#B4482F" },
 ];
 
+let currentUser = null;
+let currentUserDoc = null;
 let selectedCategory = null;
 let currentFilter = "all";
 let allTasks = [];
-let unsubscribeBoard = null;
-let unsubscribeDash = null;
-let unsubscribeTicket = null;
+let scopeMine = false;
+let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, unsubscribeUserDoc = null, unsubscribeTeam = null;
 let currentTicketId = null;
 let ticketReturnView = 'board';
+let currentView = 'dashboard';
 
 function catInfo(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
 function statusInfo(id) { return STATUSES.find(s => s.id === id) || STATUSES[0]; }
-
 function timeAgo(ts) {
   const diff = Math.floor((Date.now() - ts) / 1000);
   if (diff < 60) return "щойно";
@@ -421,23 +468,25 @@ function timeAgo(ts) {
   if (diff < 86400) return Math.floor(diff / 3600) + " год тому";
   return Math.floor(diff / 86400) + " дн тому";
 }
-
 function fullDate(ts) {
   const d = new Date(ts);
   return d.toLocaleDateString('uk-UA') + ' ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
 }
-
 function escapeHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
-
-function shortId(id) {
-  return '#' + id.slice(-6).toUpperCase();
+function shortId(id) { return '#' + id.slice(-6).toUpperCase(); }
+function authErrorMsg(e) {
+  const map = {
+    'auth/email-already-in-use': 'Ця пошта вже зареєстрована.',
+    'auth/weak-password': 'Пароль має бути не менше 6 символів.',
+    'auth/invalid-email': 'Некоректна пошта.',
+    'auth/user-not-found': 'Невірна пошта або пароль.',
+    'auth/wrong-password': 'Невірна пошта або пароль.',
+    'auth/invalid-credential': 'Невірна пошта або пароль.',
+    'auth/missing-password': 'Введи пароль.'
+  };
+  return map[e.code] || e.message;
 }
 
 const themeSwitch = document.getElementById('theme-switch');
@@ -445,28 +494,177 @@ themeSwitch.addEventListener('change', () => {
   document.documentElement.setAttribute('data-theme', themeSwitch.checked ? 'dark' : 'light');
 });
 
-document.querySelectorAll('.nav-item').forEach(btn => {
-  btn.addEventListener('click', () => switchView(btn.dataset.view));
+// ======= AUTH TABS =======
+function setAuthTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
+  document.getElementById('form-register').classList.toggle('hidden', tab !== 'register');
+  document.getElementById('auth-error').classList.add('hidden');
+}
+
+async function doRegister() {
+  const name = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errBox = document.getElementById('auth-error');
+  errBox.classList.add('hidden');
+  if (!name || !email || !password) { errBox.textContent = "Заповни всі поля."; errBox.classList.remove('hidden'); return; }
+  const btn = document.getElementById('btn-register');
+  btn.disabled = true; btn.textContent = "Реєструю...";
+  try {
+    const usersSnap = await usersRef.limit(1).get();
+    const isFirst = usersSnap.empty;
+    const cred = await auth.createUserWithEmailAndPassword(email, password);
+    await usersRef.doc(cred.user.uid).set({
+      name: name, email: email, role: isFirst ? 'manager' : 'employee', approved: isFirst, createdAt: Date.now()
+    });
+  } catch (e) {
+    errBox.textContent = authErrorMsg(e);
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = "Зареєструватись";
+  }
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errBox = document.getElementById('auth-error');
+  errBox.classList.add('hidden');
+  if (!email || !password) { errBox.textContent = "Заповни email і пароль."; errBox.classList.remove('hidden'); return; }
+  const btn = document.getElementById('btn-login');
+  btn.disabled = true; btn.textContent = "Входжу...";
+  try {
+    await auth.signInWithEmailAndPassword(email, password);
+  } catch (e) {
+    errBox.textContent = authErrorMsg(e);
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = "Увійти";
+  }
+}
+
+function doLogout() {
+  stopUnsubs();
+  auth.signOut();
+}
+
+// ======= AUTH STATE BOOTSTRAP =======
+auth.onAuthStateChanged(user => {
+  document.getElementById('loading-screen').classList.add('hidden');
+  stopUnsubs();
+  if (!user) {
+    currentUser = null; currentUserDoc = null;
+    document.getElementById('app-root').classList.add('hidden');
+    document.getElementById('pending-screen').classList.add('hidden');
+    document.getElementById('auth-screen').classList.remove('hidden');
+    return;
+  }
+  currentUser = user;
+  unsubscribeUserDoc = usersRef.doc(user.uid).onSnapshot(doc => {
+    if (!doc.exists) {
+      document.getElementById('auth-screen').classList.remove('hidden');
+      document.getElementById('app-root').classList.add('hidden');
+      document.getElementById('pending-screen').classList.add('hidden');
+      return;
+    }
+    currentUserDoc = doc.data();
+    if (currentUserDoc.rejected) {
+      document.getElementById('pending-text').textContent = 'На жаль, реєстрацію відхилено. Звернись до керівника напряму.';
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-root').classList.add('hidden');
+      document.getElementById('pending-screen').classList.remove('hidden');
+      return;
+    }
+    if (!currentUserDoc.approved) {
+      document.getElementById('pending-text').textContent = "Твою заявку на реєстрацію передано керівнику. Щойно підтвердять — зможеш користуватись сервісом.";
+      document.getElementById('auth-screen').classList.add('hidden');
+      document.getElementById('app-root').classList.add('hidden');
+      document.getElementById('pending-screen').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('auth-screen').classList.add('hidden');
+    document.getElementById('pending-screen').classList.add('hidden');
+    document.getElementById('app-root').classList.remove('hidden');
+    bootApp();
+  });
 });
 
 function stopUnsubs() {
   if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
   if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
   if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
+  if (unsubscribeTeam) { unsubscribeTeam(); unsubscribeTeam = null; }
+}
+
+// ======= APP BOOT =======
+function bootApp() {
+  document.getElementById('sidebar-avatar').textContent = currentUserDoc.name.charAt(0).toUpperCase();
+  document.getElementById('sidebar-name').textContent = currentUserDoc.name;
+  document.getElementById('sidebar-role').textContent = currentUserDoc.role === 'manager' ? 'Керівник' : 'Працівник';
+
+  const nav = document.getElementById('nav-items');
+  nav.innerHTML = '';
+  const items = currentUserDoc.role === 'manager'
+    ? [
+        { view: 'dashboard', ic: '🏠', label: 'Дашборд' },
+        { view: 'create', ic: '➕', label: 'Створити заявку' },
+        { view: 'board', ic: '📋', label: 'Всі заявки' },
+        { view: 'team', ic: '👥', label: 'Працівники' },
+        { view: 'help', ic: '❓', label: 'Довідка' },
+      ]
+    : [
+        { view: 'create', ic: '➕', label: 'Створити заявку' },
+        { view: 'board', ic: '📋', label: 'Мої заявки' },
+        { view: 'help', ic: '❓', label: 'Довідка' },
+      ];
+  items.forEach(it => {
+    const btn = document.createElement('button');
+    btn.className = 'nav-item';
+    btn.dataset.view = it.view;
+    btn.innerHTML = '<span class="ic">' + it.ic + '</span> ' + it.label + (it.view === 'team' ? '<span class="nav-badge hidden" id="team-badge"></span>' : '');
+    btn.onclick = () => switchView(it.view);
+    nav.appendChild(btn);
+  });
+
+  scopeMine = currentUserDoc.role !== 'manager';
+  document.getElementById('board-title').textContent = scopeMine ? 'Мої заявки' : 'Всі заявки';
+
+  switchView(currentUserDoc.role === 'manager' ? 'dashboard' : 'create');
+
+  if (currentUserDoc.role === 'manager') watchPendingBadge();
+}
+
+function watchPendingBadge() {
+  usersRef.where('approved', '==', false).onSnapshot(snap => {
+    const count = snap.docs.filter(d => !d.data().rejected).length;
+    const badge = document.getElementById('team-badge');
+    if (badge) {
+      if (count > 0) { badge.textContent = count; badge.classList.remove('hidden'); }
+      else { badge.classList.add('hidden'); }
+    }
+  });
 }
 
 function switchView(view) {
+  currentView = view;
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + view).classList.add('active');
 
-  stopUnsubs();
+  if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
+  if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
+  if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
+  if (unsubscribeTeam) { unsubscribeTeam(); unsubscribeTeam = null; }
 
   if (view === 'dashboard') startDashboard();
   if (view === 'create') { renderTiles(); resetForm(); }
   if (view === 'board') { renderFilterChips(); startBoard(); }
+  if (view === 'team') startTeam();
 }
 
+// ======= CREATE =======
 function renderTiles() {
   const area = document.getElementById('tile-area');
   area.innerHTML = '';
@@ -477,7 +675,6 @@ function renderTiles() {
     title.className = 'group-title';
     title.textContent = GROUPS[groupId];
     area.appendChild(title);
-
     const grid = document.createElement('div');
     grid.className = 'tile-grid';
     groupCats.forEach(c => {
@@ -511,7 +708,6 @@ document.getElementById('btn-change-cat').onclick = () => {
 function resetForm() {
   document.getElementById('tile-area').classList.remove('hidden');
   document.getElementById('form-area').classList.add('hidden');
-  document.getElementById('inp-name').value = '';
   document.getElementById('inp-text').value = '';
   document.getElementById('inp-urgent').checked = false;
   document.getElementById('emp-error').classList.add('hidden');
@@ -520,25 +716,17 @@ function resetForm() {
 }
 
 async function submitTask() {
-  const name = document.getElementById('inp-name').value.trim();
   const text = document.getElementById('inp-text').value.trim();
   const urgent = document.getElementById('inp-urgent').checked;
   const errBox = document.getElementById('emp-error');
   const btn = document.getElementById('btn-submit');
   errBox.classList.add('hidden');
-
-  if (!name || !text || !selectedCategory) {
-    errBox.textContent = "Заповни ім'я і опис заявки.";
-    errBox.classList.remove('hidden');
-    return;
-  }
-
-  btn.disabled = true;
-  btn.textContent = "Надсилаю...";
-
+  if (!text || !selectedCategory) { errBox.textContent = "Обери категорію і опиши запит."; errBox.classList.remove('hidden'); return; }
+  btn.disabled = true; btn.textContent = "Надсилаю...";
   try {
     await tasksRef.add({
-      author: name,
+      author: currentUserDoc.name,
+      authorUid: currentUser.uid,
       category: selectedCategory,
       priority: urgent ? "urgent" : "normal",
       text: text,
@@ -552,11 +740,11 @@ async function submitTask() {
     errBox.textContent = "Не вдалося надіслати. Перевір інтернет і спробуй ще раз.";
     errBox.classList.remove('hidden');
   } finally {
-    btn.disabled = false;
-    btn.textContent = "Надіслати заявку";
+    btn.disabled = false; btn.textContent = "Надіслати заявку";
   }
 }
 
+// ======= DASHBOARD =======
 function startDashboard() {
   unsubscribeDash = tasksRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
     const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -566,37 +754,31 @@ function startDashboard() {
 }
 
 function renderDashboard(tasks) {
-  const counts = { new: 0, progress: 0, done: 0, urgent: 0 };
-  tasks.forEach(t => {
-    if (counts[t.status] !== undefined) counts[t.status]++;
-    if (t.priority === 'urgent') counts.urgent++;
-  });
-
+  const counts = { new: 0, progress: 0, waiting: 0, done: 0, rejected: 0, urgent: 0 };
+  tasks.forEach(t => { if (counts[t.status] !== undefined) counts[t.status]++; if (t.priority === 'urgent') counts.urgent++; });
   const grid = document.getElementById('stats-grid');
   grid.innerHTML = '';
-  const cards = [
+  [
     { label: 'Всього заявок', num: tasks.length },
     { label: 'Нові', num: counts.new },
     { label: 'В роботі', num: counts.progress },
+    { label: 'Уточнення', num: counts.waiting },
     { label: 'Виконано', num: counts.done },
+    { label: 'Відхилено', num: counts.rejected },
     { label: 'Термінові', num: counts.urgent },
-  ];
-  cards.forEach(c => {
+  ].forEach(c => {
     const div = document.createElement('div');
     div.className = 'stat-card';
     div.innerHTML = '<div class="stat-num">' + c.num + '</div><div class="stat-label">' + c.label + '</div>';
     grid.appendChild(div);
   });
-
   const recentList = document.getElementById('recent-list');
   recentList.innerHTML = '';
-  if (tasks.length === 0) {
-    recentList.innerHTML = '<div class="empty-note">Поки що немає заявок</div>';
-  } else {
-    tasks.slice(0, 5).forEach(t => recentList.appendChild(renderCard(t, 'dashboard')));
-  }
+  if (tasks.length === 0) recentList.innerHTML = '<div class="empty-note">Поки що немає заявок</div>';
+  else tasks.slice(0, 5).forEach(t => recentList.appendChild(renderCard(t, 'dashboard')));
 }
 
+// ======= BOARD =======
 function renderFilterChips() {
   const box = document.getElementById('filter-row');
   box.innerHTML = '';
@@ -606,7 +788,6 @@ function renderFilterChips() {
   allBtn.style.background = currentFilter === 'all' ? '#1B2430' : '';
   allBtn.onclick = () => { currentFilter = 'all'; renderFilterChips(); renderBoard(); };
   box.appendChild(allBtn);
-
   CATEGORIES.forEach(c => {
     const btn = document.createElement('button');
     btn.className = 'chip' + (currentFilter === c.id ? ' active' : '');
@@ -620,39 +801,35 @@ function renderFilterChips() {
 function startBoard() {
   const errBox = document.getElementById('mgr-error');
   errBox.classList.add('hidden');
-  unsubscribeBoard = tasksRef.orderBy('createdAt', 'desc').onSnapshot(
+  let q = tasksRef.orderBy('createdAt', 'desc');
+  if (scopeMine) q = tasksRef.where('authorUid', '==', currentUser.uid);
+  unsubscribeBoard = q.onSnapshot(
     snapshot => {
       allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      if (scopeMine) allTasks.sort((a, b) => b.createdAt - a.createdAt);
       renderBoard();
     },
-    err => {
-      errBox.textContent = "Не вдалося завантажити заявки: " + err.message;
-      errBox.classList.remove('hidden');
-    }
+    err => { errBox.textContent = "Не вдалося завантажити заявки: " + err.message; errBox.classList.remove('hidden'); }
   );
 }
 
-async function changeStatus(id, event) {
-  if (event) event.stopPropagation();
-  const task = allTasks.find(t => t.id === id) || (currentTicketId === id ? window.__currentTicket : null);
+function statusOptionsHtml(currentStatus) {
+  return STATUSES.map(s => '<option value="' + s.id + '"' + (s.id === currentStatus ? ' selected' : '') + '>' + s.label + '</option>').join('');
+}
+
+async function changeStatusTo(id, newStatusId) {
+  const task = allTasks.find(t => t.id === id) || window.__currentTicket;
   if (!task) return;
-  const idx = STATUSES.findIndex(s => s.id === task.status);
-  const nextStatus = STATUSES[Math.min(idx + 1, STATUSES.length - 1)];
-  const entry = { type: 'status', text: 'Статус змінено на: ' + nextStatus.label, createdAt: Date.now() };
+  const newStatus = statusInfo(newStatusId);
+  const entry = { type: 'status', text: 'Статус змінено на: ' + newStatus.label, createdAt: Date.now() };
   try {
-    await tasksRef.doc(id).update({
-      status: nextStatus.id,
-      activity: firebase.firestore.FieldValue.arrayUnion(entry)
-    });
-  } catch (e) {
-    showError("Не вдалося оновити статус.");
-  }
+    await tasksRef.doc(id).update({ status: newStatusId, activity: firebase.firestore.FieldValue.arrayUnion(entry) });
+  } catch (e) { showError("Не вдалося оновити статус."); }
 }
 
 async function deleteTask(id, event) {
   if (event) event.stopPropagation();
-  try { await tasksRef.doc(id).delete(); }
-  catch (e) { showError("Не вдалося видалити заявку."); }
+  try { await tasksRef.doc(id).delete(); } catch (e) { showError("Не вдалося видалити заявку."); }
 }
 
 function showError(msg) {
@@ -684,7 +861,6 @@ function renderBoard() {
 
 function renderCard(task, fromView) {
   const cat = catInfo(task.category);
-  const statusIdx = STATUSES.findIndex(s => s.id === task.status);
   const activity = task.activity || [];
   const commentCount = activity.filter(a => a.type === 'comment').length;
 
@@ -695,12 +871,11 @@ function renderCard(task, fromView) {
   html += '</div>';
   html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
   html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
-
   html += '<div class="task-actions">';
-  html += '<button class="btn-cycle' + (statusIdx === 2 ? ' done' : '') + '" onclick="changeStatus(&quot;' + task.id + '&quot;, event)">';
-  html += statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
-  html += '</button>';
-  html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
+  html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
+  if (currentUserDoc && currentUserDoc.role === 'manager') {
+    html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
+  }
   html += '</div>';
 
   const card = document.createElement('div');
@@ -713,7 +888,9 @@ function renderCard(task, fromView) {
 // ======= TICKET DETAIL =======
 function openTicket(id, fromView) {
   ticketReturnView = fromView || 'board';
-  stopUnsubs();
+  if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
+  if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
+  if (unsubscribeTeam) { unsubscribeTeam(); unsubscribeTeam = null; }
   document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-ticket').classList.add('active');
@@ -727,98 +904,83 @@ function openTicket(id, fromView) {
 }
 
 function closeTicket() {
-  stopUnsubs();
+  if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
   switchView(ticketReturnView);
 }
 
 function renderTicket(task) {
   const cat = catInfo(task.category);
   const status = statusInfo(task.status);
-  const statusIdx = STATUSES.findIndex(s => s.id === task.status);
   const activity = task.activity || [];
 
-  document.getElementById('ticket-breadcrumb').innerHTML =
-    '<a onclick="closeTicket()">Всі заявки</a> &nbsp;›&nbsp; ' + cat.icon + ' ' + escapeHtml(cat.label);
-
+  document.getElementById('ticket-breadcrumb').innerHTML = '<a onclick="closeTicket()">' + (scopeMine ? 'Мої заявки' : 'Всі заявки') + '</a> &nbsp;›&nbsp; ' + cat.icon + ' ' + escapeHtml(cat.label);
   document.getElementById('ticket-title').textContent = task.text.length > 70 ? task.text.slice(0, 70) + '…' : task.text;
   document.getElementById('ticket-id').textContent = shortId(task.id);
-
   document.getElementById('ticket-desc-text').textContent = task.text;
 
-  const statusBtn = document.getElementById('ticket-status-btn');
-  statusBtn.style.background = status.color;
-  statusBtn.textContent = statusIdx === 2 ? '✓ Виконано' : 'Статус: ' + status.label + ' →';
-  statusBtn.disabled = statusIdx === 2;
-  statusBtn.style.opacity = statusIdx === 2 ? '0.85' : '1';
-  statusBtn.style.cursor = statusIdx === 2 ? 'default' : 'pointer';
+  const sel = document.getElementById('ticket-status-select');
+  sel.innerHTML = statusOptionsHtml(task.status);
+  sel.style.background = status.color;
 
-  // participants
   const participantsBox = document.getElementById('ticket-participants');
   const commentAuthors = [...new Set(activity.filter(a => a.type === 'comment').map(a => a.author))].filter(a => a !== task.author);
   let pHtml = '<div class="participant-row">👤 ' + escapeHtml(task.author) + '<span class="participant-role">· Автор</span></div>';
-  commentAuthors.forEach(a => {
-    pHtml += '<div class="participant-row">👤 ' + escapeHtml(a) + '<span class="participant-role">· Коментував(ла)</span></div>';
-  });
+  commentAuthors.forEach(a => { pHtml += '<div class="participant-row">👤 ' + escapeHtml(a) + '<span class="participant-role">· Коментував(ла)</span></div>'; });
   participantsBox.innerHTML = pHtml;
 
-  // details
-  const detailsBox = document.getElementById('ticket-details');
-  detailsBox.innerHTML =
+  document.getElementById('ticket-details').innerHTML =
     '<div class="detail-row"><div class="detail-label">Категорія</div><div class="detail-value">' + cat.icon + ' ' + escapeHtml(cat.label) + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Терміновість</div><div class="detail-value">' + (task.priority === 'urgent' ? '⚠ Термінове' : 'Звичайне') + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Створено</div><div class="detail-value">' + fullDate(task.createdAt) + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>';
 
-  // activity feed, newest first
   const sorted = activity.slice().sort((a, b) => b.createdAt - a.createdAt);
   const feed = document.getElementById('ticket-activity');
-  if (sorted.length === 0) {
-    feed.innerHTML = '<div class="empty-note">Активності ще немає</div>';
-  } else {
-    feed.innerHTML = sorted.map((a, i) => {
-      const tag = i === 0 ? '<span class="latest-tag">Останнє</span>' : '';
-      if (a.type === 'comment') {
-        const initial = (a.author || '?').trim().charAt(0).toUpperCase();
-        return '<div class="activity-item"><div class="activity-comment">' +
-          '<div class="activity-avatar">' + initial + '</div>' +
-          '<div class="activity-comment-body">' +
-          '<div class="activity-comment-top"><span class="activity-comment-author">' + escapeHtml(a.author) + tag + '</span><span class="activity-comment-time">' + fullDate(a.createdAt) + '</span></div>' +
-          '<div class="activity-comment-text">' + escapeHtml(a.text) + '</div>' +
-          '</div></div></div>';
-      } else {
-        return '<div class="activity-item"><div class="activity-status-bar">' +
-          '<span class="activity-status-text">' + escapeHtml(a.text) + tag + '</span>' +
-          '<span class="activity-status-time">' + fullDate(a.createdAt) + '</span>' +
-          '</div></div>';
-      }
-    }).join('');
-  }
-}
-
-async function cycleTicketStatus() {
-  if (!currentTicketId) return;
-  await changeStatus(currentTicketId);
+  if (sorted.length === 0) feed.innerHTML = '<div class="empty-note">Активності ще немає</div>';
+  else feed.innerHTML = sorted.map((a, i) => {
+    const tag = i === 0 ? '<span class="latest-tag">Останнє</span>' : '';
+    if (a.type === 'comment') {
+      const initial = (a.author || '?').trim().charAt(0).toUpperCase();
+      return '<div class="activity-item"><div class="activity-comment"><div class="activity-avatar">' + initial + '</div><div class="activity-comment-body"><div class="activity-comment-top"><span class="activity-comment-author">' + escapeHtml(a.author) + tag + '</span><span class="activity-comment-time">' + fullDate(a.createdAt) + '</span></div><div class="activity-comment-text">' + escapeHtml(a.text) + '</div></div></div></div>';
+    }
+    return '<div class="activity-item"><div class="activity-status-bar"><span class="activity-status-text">' + escapeHtml(a.text) + tag + '</span><span class="activity-status-time">' + fullDate(a.createdAt) + '</span></div></div>';
+  }).join('');
 }
 
 async function submitTicketComment() {
   if (!currentTicketId) return;
-  const nameInput = document.getElementById('ticket-c-name');
   const textInput = document.getElementById('ticket-c-text');
-  const name = nameInput.value.trim();
   const text = textInput.value.trim();
-  if (!name || !text) return;
-  const entry = { type: 'comment', author: name, text: text, createdAt: Date.now() };
+  if (!text) return;
+  const entry = { type: 'comment', author: currentUserDoc.name, text: text, createdAt: Date.now() };
   try {
-    await tasksRef.doc(currentTicketId).update({
-      activity: firebase.firestore.FieldValue.arrayUnion(entry)
-    });
+    await tasksRef.doc(currentTicketId).update({ activity: firebase.firestore.FieldValue.arrayUnion(entry) });
     textInput.value = '';
-  } catch (e) {
-    showError("Не вдалося додати коментар.");
-  }
+  } catch (e) { showError("Не вдалося додати коментар."); }
 }
 
-startDashboard();
+// ======= TEAM =======
+function startTeam() {
+  unsubscribeTeam = usersRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderTeam(users);
+  });
+}
+
+function renderTeam(users) {
+  const pending = users.filter(u => !u.approved && !u.rejected && u.role !== 'manager');
+  const approved = users.filter(u => u.approved);
+
+  const pendingBox = document.getElementById('pending-list');
+  pendingBox.innerHTML = pending.length === 0 ? '<div class="empty-note">Немає нових заявок на реєстрацію</div>' :
+    pending.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#8A5CA8;">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;gap:8px;"><button class="btn-approve" onclick="approveUser(&quot;' + u.id + '&quot;)">Підтвердити</button><button class="btn-reject" onclick="rejectUser(&quot;' + u.id + '&quot;)">Відхилити</button></div></div>').join('');
+
+  const approvedBox = document.getElementById('approved-list');
+  approvedBox.innerHTML = approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span></div>').join('');
+}
+
+async function approveUser(uid) { await usersRef.doc(uid).update({ approved: true, rejected: false }); }
+async function rejectUser(uid) { await usersRef.doc(uid).update({ approved: false, rejected: true }); }
 </script>
 </body>
 </html>
