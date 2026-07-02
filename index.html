@@ -254,6 +254,7 @@
       <div class="auth-field"><label>Email</label><input type="email" id="login-email"></div>
       <div class="auth-field"><label>Пароль</label><input type="password" id="login-password"></div>
       <button class="btn-primary wide" onclick="doLogin()" id="btn-login">Увійти</button>
+      <div class="auth-hint"><a onclick="doResetPassword()" style="color:var(--blue);cursor:pointer;">Забув(ла) пароль?</a></div>
     </div>
 
     <div id="form-register" class="hidden">
@@ -548,6 +549,22 @@ async function doLogin() {
 function doLogout() {
   stopUnsubs();
   auth.signOut();
+}
+
+async function doResetPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  const errBox = document.getElementById('auth-error');
+  errBox.classList.remove('hidden');
+  errBox.style.color = '';
+  if (!email) { errBox.textContent = "Спочатку введи email у поле вище, потім тисни \"Забув пароль?\"."; return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    errBox.style.color = 'var(--green)';
+    errBox.textContent = "Лист зі скиданням пароля надіслано на " + email + ". Перевір пошту (і папку Спам).";
+  } catch (e) {
+    errBox.style.color = '';
+    errBox.textContent = authErrorMsg(e);
+  }
 }
 
 // ======= AUTH STATE BOOTSTRAP =======
