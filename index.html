@@ -94,19 +94,22 @@
 
   .group-title { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 22px 0 10px; }
   .group-title:first-of-type { margin-top: 4px; }
-  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+  .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
   .tile {
     background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 16px;
-    display: flex; align-items: center; gap: 12px; cursor: pointer; text-align: left;
+    display: flex; align-items: flex-start; gap: 12px; cursor: pointer; text-align: left;
     transition: border-color 0.15s, transform 0.1s;
   }
   .tile:hover { border-color: var(--accent); transform: translateY(-1px); }
   .tile-icon { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
   .tile-label { font-size: 13.5px; font-weight: 700; color: var(--ink); line-height: 1.3; }
+  .tile-hint { font-size: 11.5px; color: var(--muted); line-height: 1.35; margin-top: 3px; font-weight: 500; }
 
-  .form-panel { max-width: 480px; }
-  .selected-cat-banner { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; margin-bottom: 18px; }
-  .selected-cat-banner .tile-icon { width: 32px; height: 32px; font-size: 15px; }
+  .form-panel { max-width: 520px; }
+  .selected-cat-banner { display: flex; align-items: flex-start; gap: 12px; padding: 14px; border-radius: 8px; margin-bottom: 18px; }
+  .selected-cat-banner .tile-icon { width: 34px; height: 34px; font-size: 16px; }
+  .selected-cat-title { font-weight: 800; font-size: 14.5px; }
+  .selected-cat-hint { font-size: 12.5px; color: var(--muted); margin-top: 3px; line-height: 1.4; font-weight: 500; }
   label.field-label { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; display: block; margin-top: 16px; }
   input[type="text"], textarea {
     width: 100%; padding: 11px 12px; margin: 6px 0 0; border: 1.5px solid var(--border);
@@ -131,7 +134,7 @@
     border: 1.5px solid var(--border); background: var(--card-bg); color: var(--ink); cursor: pointer;
   }
   .chip.active { color: #fff; border-color: transparent; }
-  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+  .columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
   .col-title { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .empty-note { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 8px 0; }
 
@@ -151,6 +154,24 @@
 
   .help-text { font-size: 14px; line-height: 1.7; color: var(--ink); max-width: 620px; }
   .help-text b { font-weight: 800; }
+
+  .comments-toggle-row { margin-top: 10px; }
+  .btn-comments-toggle {
+    background: none; border: none; color: var(--blue); font-size: 12px; font-weight: 700; cursor: pointer; padding: 0;
+  }
+  html[data-theme="dark"] .btn-comments-toggle { color: var(--accent); }
+  .comments-list { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .comment-item { background: var(--content-bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
+  .comment-meta { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 3px; }
+  .comment-text { font-size: 13px; color: var(--ink); line-height: 1.4; }
+  .add-comment-box { margin-top: 8px; }
+  .add-comment-box input, .add-comment-box textarea { font-size: 12.5px; padding: 8px 10px; }
+  .add-comment-box textarea { margin-top: 6px; }
+  .btn-add-comment {
+    margin-top: 6px; font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 6px;
+    border: none; background: var(--ink); color: var(--card-bg); cursor: pointer;
+  }
+  html[data-theme="dark"] .btn-add-comment { background: var(--accent); color: #14181F; }
 </style>
 </head>
 <body>
@@ -235,7 +256,7 @@
 
     <section id="view-board" class="view">
       <h1 class="page-title">Всі заявки</h1>
-      <p class="page-sub">Керування статусами</p>
+      <p class="page-sub">Керування статусами та коментарі</p>
 
       <div class="filter-row" id="filter-row"></div>
       <div id="mgr-error" class="error-box hidden"></div>
@@ -247,8 +268,8 @@
       <p class="page-sub">Як користуватись сервісом</p>
       <div class="help-text">
         <p><b>Створити заявку</b> — обери категорію, яка найточніше описує запит, заповни коротко суть і натисни "Надіслати". Заявка одразу з'явиться на дошці.</p>
-        <p><b>Всі заявки</b> — тут видно всі заявки, розподілені по статусах: Нова → В роботі → Виконано. Натискаючи на кнопку статусу, керівник переміщує заявку далі.</p>
-        <p><b>Термінові заявки</b> позначай окремо — вони видно виділені в списку.</p>
+        <p><b>Коментарі</b> — під кожною заявкою можна відкрити коментарі і написати уточнення чи відповідь. Це бачать всі, хто відкриває заявку.</p>
+        <p><b>Всі заявки</b> — тут видно всі заявки, розподілені по статусах: Нова → В роботі → Виконано.</p>
         <p>Якщо не знайшов підходящу категорію — обери "Інше" і опиши запит детальніше.</p>
       </div>
     </section>
@@ -276,20 +297,34 @@ const GROUPS = {
   other: "Інше"
 };
 const CATEGORIES = [
-  { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧" },
-  { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻" },
-  { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺" },
-  { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️" },
-  { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄" },
-  { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️" },
-  { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚" },
-  { id: "training_service", label: "Навчання по послугах", group: "hr", color: "#6B5CB4", icon: "🎓" },
-  { id: "meeting", label: "Особиста зустріч", group: "hr", color: "#3B6EA8", icon: "🤝" },
-  { id: "leave", label: "Відпустка / лікарняний", group: "hr", color: "#7A8C5C", icon: "🌴" },
-  { id: "idea", label: "Ідея", group: "growth", color: "#C98A2E", icon: "💡" },
-  { id: "problem_client", label: "Проблемний клієнт", group: "growth", color: "#B4482F", icon: "⚠️" },
-  { id: "supplies", label: "Видаткові матеріали", group: "other", color: "#8A5CA8", icon: "📦" },
-  { id: "other", label: "Інше", group: "other", color: "#6B6B5E", icon: "❓" },
+  { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧",
+    hint: "Напишіть, яке обладнання зламалось і в чому проблема (каса, принтер, кондиціонер тощо)." },
+  { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻",
+    hint: "Опишіть проблему з комп'ютером, інтернетом чи програмами (1С, планшет, термінал тощо)." },
+  { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺",
+    hint: "Напишіть, які поломки чи проблеми у вас на магазині (вітрина, вивіска, освітлення тощо)." },
+  { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️",
+    hint: "Вкажіть, які матеріали потрібні: воблери, цінники, акційні POS-матеріали." },
+  { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄",
+    hint: "Вкажіть, в який магазин чи відділ хочете перевестись і коротко чому." },
+  { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️",
+    hint: "Опишіть, які зміни потрібні в графіку і на який період." },
+  { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚",
+    hint: "Опишіть, що саме не виходить чи чого хочете навчитись." },
+  { id: "training_service", label: "Навчання по послугах", group: "hr", color: "#6B5CB4", icon: "🎓",
+    hint: "Вкажіть, яка послуга цікавить і зручний час." },
+  { id: "meeting", label: "Особиста зустріч", group: "hr", color: "#3B6EA8", icon: "🤝",
+    hint: "Коротко напишіть тему зустрічі, щоб керівник підготувався." },
+  { id: "leave", label: "Відпустка / лікарняний", group: "hr", color: "#7A8C5C", icon: "🌴",
+    hint: "Вкажіть дати та причину." },
+  { id: "idea", label: "Ідея", group: "growth", color: "#C98A2E", icon: "💡",
+    hint: "Опишіть свою пропозицію, як покращити роботу магазину." },
+  { id: "problem_client", label: "Проблемний клієнт", group: "growth", color: "#B4482F", icon: "⚠️",
+    hint: "Опишіть ситуацію з клієнтом коротко і по суті." },
+  { id: "supplies", label: "Видаткові матеріали", group: "other", color: "#8A5CA8", icon: "📦",
+    hint: "Які матеріали закінчуються: пакети, чеки, канцелярія тощо." },
+  { id: "other", label: "Інше", group: "other", color: "#6B6B5E", icon: "❓",
+    hint: "Опишіть запит, якщо жодна категорія не підійшла." },
 ];
 const STATUSES = [
   { id: "new", label: "Нова" },
@@ -302,6 +337,7 @@ let currentFilter = "all";
 let allTasks = [];
 let unsubscribeBoard = null;
 let unsubscribeDash = null;
+let expandedComments = new Set();
 
 function catInfo(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
 
@@ -311,6 +347,15 @@ function timeAgo(ts) {
   if (diff < 3600) return Math.floor(diff / 60) + " хв тому";
   if (diff < 86400) return Math.floor(diff / 3600) + " год тому";
   return Math.floor(diff / 86400) + " дн тому";
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
 
 const themeSwitch = document.getElementById('theme-switch');
@@ -351,7 +396,7 @@ function renderTiles() {
     groupCats.forEach(c => {
       const tile = document.createElement('button');
       tile.className = 'tile';
-      tile.innerHTML = '<div class="tile-icon" style="background:' + c.color + '22;color:' + c.color + ';">' + c.icon + '</div><div class="tile-label">' + c.label + '</div>';
+      tile.innerHTML = '<div class="tile-icon" style="background:' + c.color + '22;color:' + c.color + ';">' + c.icon + '</div><div><div class="tile-label">' + c.label + '</div><div class="tile-hint">' + c.hint + '</div></div>';
       tile.onclick = () => selectCategory(c.id);
       grid.appendChild(tile);
     });
@@ -366,7 +411,8 @@ function selectCategory(id) {
   document.getElementById('form-area').classList.remove('hidden');
   const banner = document.getElementById('selected-cat-banner');
   banner.style.background = c.color + '18';
-  banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div style="font-weight:800;color:' + c.color + ';">' + c.label + '</div>';
+  banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div><div class="selected-cat-title" style="color:' + c.color + ';">' + c.label + '</div><div class="selected-cat-hint">' + c.hint + '</div></div>';
+  document.getElementById('inp-text').placeholder = c.hint;
 }
 
 document.getElementById('btn-change-cat').onclick = () => {
@@ -410,7 +456,8 @@ async function submitTask() {
       priority: urgent ? "urgent" : "normal",
       text: text,
       status: "new",
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      comments: []
     });
     document.getElementById('emp-success').classList.remove('hidden');
     setTimeout(() => { resetForm(); }, 1800);
@@ -517,6 +564,31 @@ async function deleteTask(id) {
   }
 }
 
+function toggleComments(id) {
+  if (expandedComments.has(id)) expandedComments.delete(id);
+  else expandedComments.add(id);
+  const el = document.getElementById('comments-' + id);
+  if (el) el.classList.toggle('hidden');
+}
+
+async function addComment(id) {
+  const nameInput = document.getElementById('c-name-' + id);
+  const textInput = document.getElementById('c-text-' + id);
+  const name = nameInput.value.trim();
+  const text = textInput.value.trim();
+  if (!name || !text) return;
+  const comment = { author: name, text: text, createdAt: Date.now() };
+  try {
+    await tasksRef.doc(id).update({
+      comments: firebase.firestore.FieldValue.arrayUnion(comment)
+    });
+    textInput.value = '';
+  } catch (e) {
+    document.getElementById('mgr-error').textContent = "Не вдалося додати коментар.";
+    document.getElementById('mgr-error').classList.remove('hidden');
+  }
+}
+
 function renderBoard() {
   const visible = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.category === currentFilter);
   const columns = document.getElementById('columns');
@@ -542,52 +614,47 @@ function renderBoard() {
 function renderCard(task, withActions) {
   const cat = catInfo(task.category);
   const statusIdx = STATUSES.findIndex(s => s.id === task.status);
-  const card = document.createElement('div');
-  card.className = 'task-card';
+  const comments = task.comments || [];
 
-  const top = document.createElement('div');
-  top.className = 'task-top';
-  const badge = document.createElement('span');
-  badge.className = 'cat-badge';
-  badge.textContent = cat.icon + ' ' + cat.label;
-  badge.style.background = cat.color;
-  top.appendChild(badge);
-  if (task.priority === 'urgent') {
-    const flag = document.createElement('span');
-    flag.className = 'urgent-flag';
-    flag.textContent = '⚠ ТЕРМІНОВО';
-    top.appendChild(flag);
-  }
-  card.appendChild(top);
-
-  const text = document.createElement('p');
-  text.className = 'task-text';
-  text.textContent = task.text;
-  card.appendChild(text);
-
-  const meta = document.createElement('div');
-  meta.className = 'task-meta';
-  meta.innerHTML = '<span>👤 ' + task.author + '</span><span>🕐 ' + timeAgo(task.createdAt) + '</span>';
-  card.appendChild(meta);
+  let html = '';
+  html += '<div class="task-top">';
+  html += '<span class="cat-badge" style="background:' + cat.color + ';">' + cat.icon + ' ' + escapeHtml(cat.label) + '</span>';
+  if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
+  html += '</div>';
+  html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
+  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + '</span><span>🕐 ' + timeAgo(task.createdAt) + '</span></div>';
 
   if (withActions) {
-    const actions = document.createElement('div');
-    actions.className = 'task-actions';
-    const cycleBtn = document.createElement('button');
-    cycleBtn.className = 'btn-cycle' + (statusIdx === 2 ? ' done' : '');
-    cycleBtn.textContent = statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
-    cycleBtn.onclick = () => cycleStatus(task.id);
-    actions.appendChild(cycleBtn);
-
-    const delBtn = document.createElement('button');
-    delBtn.className = 'btn-delete';
-    delBtn.textContent = '✕';
-    delBtn.title = 'Видалити';
-    delBtn.onclick = () => deleteTask(task.id);
-    actions.appendChild(delBtn);
-    card.appendChild(actions);
+    html += '<div class="task-actions">';
+    html += '<button class="btn-cycle' + (statusIdx === 2 ? ' done' : '') + '" onclick="cycleStatus(&quot;' + task.id + '&quot;)">';
+    html += statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
+    html += '</button>';
+    html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;)">✕</button>';
+    html += '</div>';
   }
 
+  html += '<div class="comments-toggle-row">';
+  html += '<button class="btn-comments-toggle" onclick="toggleComments(&quot;' + task.id + '&quot;)">💬 Коментарі (' + comments.length + ')</button>';
+  html += '</div>';
+
+  html += '<div class="comments-list' + (expandedComments.has(task.id) ? '' : ' hidden') + '" id="comments-' + task.id + '">';
+  if (comments.length === 0) {
+    html += '<div class="empty-note">Коментарів ще немає</div>';
+  } else {
+    comments.slice().sort(function(a,b){ return a.createdAt - b.createdAt; }).forEach(function(c) {
+      html += '<div class="comment-item"><div class="comment-meta">' + escapeHtml(c.author) + ' · ' + timeAgo(c.createdAt) + '</div><div class="comment-text">' + escapeHtml(c.text) + '</div></div>';
+    });
+  }
+  html += '<div class="add-comment-box">';
+  html += '<input type="text" id="c-name-' + task.id + '" placeholder="Твоє ім\u2019я">';
+  html += '<textarea id="c-text-' + task.id + '" rows="2" placeholder="Написати коментар..."></textarea>';
+  html += '<button class="btn-add-comment" onclick="addComment(&quot;' + task.id + '&quot;)">Надіслати</button>';
+  html += '</div>';
+  html += '</div>';
+
+  const card = document.createElement('div');
+  card.className = 'task-card';
+  card.innerHTML = html;
   return card;
 }
 
