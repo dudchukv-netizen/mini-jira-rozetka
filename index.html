@@ -961,22 +961,28 @@ async function submitTicketComment() {
 
 // ======= TEAM =======
 function startTeam() {
-  unsubscribeTeam = usersRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
+  unsubscribeTeam = usersRef.onSnapshot(snapshot => {
     const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     renderTeam(users);
+  }, err => {
+    document.getElementById('pending-list').innerHTML = '<div class="empty-note">Не вдалося завантажити: ' + err.message + '</div>';
   });
 }
 
 function renderTeam(users) {
-  const pending = users.filter(u => !u.approved && !u.rejected && u.role !== 'manager');
-  const approved = users.filter(u => u.approved);
+  const safe = u => ({ id: u.id, name: u.name || '(без імені)', email: u.email || '—', role: u.role || 'employee', approved: !!u.approved, rejected: !!u.rejected });
+  const list = users.map(safe);
+  const pending = list.filter(u => !u.approved && !u.rejected && u.role !== 'manager');
+  const approved = list.filter(u => u.approved);
 
   const pendingBox = document.getElementById('pending-list');
   pendingBox.innerHTML = pending.length === 0 ? '<div class="empty-note">Немає нових заявок на реєстрацію</div>' :
     pending.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#8A5CA8;">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;gap:8px;"><button class="btn-approve" onclick="approveUser(&quot;' + u.id + '&quot;)">Підтвердити</button><button class="btn-reject" onclick="rejectUser(&quot;' + u.id + '&quot;)">Відхилити</button></div></div>').join('');
 
   const approvedBox = document.getElementById('approved-list');
-  approvedBox.innerHTML = approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span></div>').join('');
+  approvedBox.innerHTML = approved.length === 0 ? '<div class="empty-note">Поки що нікого немає</div>' :
+    approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span></div>').join('');
 }
 
 async function approveUser(uid) { await usersRef.doc(uid).update({ approved: true, rejected: false }); }
