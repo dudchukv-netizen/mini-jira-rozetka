@@ -23,6 +23,7 @@
     --red: #B4482F;
     --green: #5C7A52;
     --blue: #3B6EA8;
+    --highlight-bg: #FBF1E3;
   }
   html[data-theme="dark"] {
     --sidebar-bg: #10151C;
@@ -32,6 +33,7 @@
     --ink: #E7E9EC;
     --muted: #9199A6;
     --border: #2B3239;
+    --highlight-bg: #2A2418;
   }
   * { box-sizing: border-box; }
   body {
@@ -122,7 +124,7 @@
     font-size: 14.5px; font-weight: 700; cursor: pointer;
   }
   html[data-theme="dark"] .btn-primary { background: var(--accent); color: #14181F; }
-  .btn-ghost { padding: 12px 16px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--ink); font-size: 13.5px; font-weight: 700; cursor: pointer; }
+  .btn-ghost { padding: 10px 14px; border-radius: 7px; border: 1.5px solid var(--border); background: transparent; color: var(--ink); font-size: 13px; font-weight: 700; cursor: pointer; }
   .btn-submit-row { display: flex; gap: 10px; margin-top: 22px; }
   .btn-submit-row .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .success-box { margin-top: 14px; padding: 12px 14px; background: var(--green); color: #fff; border-radius: 7px; font-size: 13.5px; font-weight: 600; }
@@ -138,7 +140,8 @@
   .col-title { font-size: 12px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
   .empty-note { font-size: 12.5px; color: var(--muted); font-style: italic; padding: 8px 0; }
 
-  .task-card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+  .task-card { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: border-color 0.15s; }
+  .task-card:hover { border-color: var(--accent); }
   .task-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
   .cat-badge { font-size: 10px; font-weight: 800; letter-spacing: 0.03em; color: #fff; padding: 3px 8px; border-radius: 20px; white-space: nowrap; }
   .urgent-flag { display: flex; align-items: center; gap: 4px; color: var(--red); font-size: 11px; font-weight: 700; }
@@ -155,23 +158,49 @@
   .help-text { font-size: 14px; line-height: 1.7; color: var(--ink); max-width: 620px; }
   .help-text b { font-weight: 800; }
 
-  .comments-toggle-row { margin-top: 10px; }
-  .btn-comments-toggle {
-    background: none; border: none; color: var(--blue); font-size: 12px; font-weight: 700; cursor: pointer; padding: 0;
-  }
-  html[data-theme="dark"] .btn-comments-toggle { color: var(--accent); }
-  .comments-list { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 10px; }
-  .comment-item { background: var(--content-bg); border-radius: 6px; padding: 8px 10px; margin-bottom: 6px; }
-  .comment-meta { font-size: 11px; color: var(--muted); font-weight: 700; margin-bottom: 3px; }
-  .comment-text { font-size: 13px; color: var(--ink); line-height: 1.4; }
-  .add-comment-box { margin-top: 8px; }
-  .add-comment-box input, .add-comment-box textarea { font-size: 12.5px; padding: 8px 10px; }
-  .add-comment-box textarea { margin-top: 6px; }
-  .btn-add-comment {
-    margin-top: 6px; font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 6px;
-    border: none; background: var(--ink); color: var(--card-bg); cursor: pointer;
-  }
-  html[data-theme="dark"] .btn-add-comment { background: var(--accent); color: #14181F; }
+  /* ---------- TICKET DETAIL PAGE ---------- */
+  .ticket-breadcrumb { font-size: 12.5px; color: var(--muted); margin-bottom: 14px; font-weight: 600; }
+  .ticket-breadcrumb a { color: var(--blue); cursor: pointer; text-decoration: none; }
+  html[data-theme="dark"] .ticket-breadcrumb a { color: var(--accent); }
+  .ticket-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .ticket-title { font-size: 21px; font-weight: 900; margin: 0; line-height: 1.3; }
+  .ticket-id { font-size: 12px; color: var(--muted); font-weight: 700; background: var(--content-bg); padding: 3px 9px; border-radius: 20px; }
+  .ticket-layout { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .ticket-main { flex: 1 1 480px; min-width: 0; }
+  .ticket-sidebar { width: 260px; flex-shrink: 0; }
+
+  .ticket-desc-box { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; font-size: 14px; line-height: 1.55; color: var(--ink); }
+  .ticket-desc-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+
+  .comment-input-row { display: flex; gap: 8px; margin-bottom: 22px; flex-wrap: wrap; }
+  .comment-input-row input:first-child { flex: 0 0 140px; margin: 0; }
+  .comment-input-row input:nth-child(2) { flex: 1; min-width: 180px; margin: 0; }
+  .comment-input-row button { flex-shrink: 0; }
+
+  .activity-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .activity-item { margin-bottom: 10px; }
+  .activity-status-bar { background: var(--highlight-bg); border-radius: 8px; padding: 12px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .activity-status-text { font-weight: 600; }
+  .activity-status-time { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .activity-comment { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 8px; padding: 12px 14px; display: flex; gap: 10px; }
+  .activity-avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--blue); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12.5px; font-weight: 800; flex-shrink: 0; }
+  .activity-comment-body { flex: 1; }
+  .activity-comment-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .activity-comment-author { font-weight: 800; font-size: 13px; }
+  .activity-comment-time { font-size: 11px; color: var(--muted); }
+  .activity-comment-text { font-size: 13.5px; margin-top: 4px; line-height: 1.45; }
+  .latest-tag { font-size: 9.5px; font-weight: 800; color: var(--muted); background: var(--content-bg); padding: 2px 7px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.04em; margin-left: 6px; }
+
+  .status-btn { width: 100%; border: none; border-radius: 8px; padding: 12px; font-size: 12.5px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: #fff; cursor: pointer; margin-bottom: 18px; }
+  .sidebar-block { background: var(--card-bg); border: 1.5px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 14px; }
+  .sidebar-label { font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+  .participant-row { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+  .participant-row:last-child { margin-bottom: 0; }
+  .participant-role { font-size: 11px; color: var(--muted); font-weight: 500; }
+  .detail-row { margin-bottom: 10px; }
+  .detail-row:last-child { margin-bottom: 0; }
+  .detail-label { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
+  .detail-value { font-size: 13px; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -256,7 +285,7 @@
 
     <section id="view-board" class="view">
       <h1 class="page-title">Всі заявки</h1>
-      <p class="page-sub">Керування статусами та коментарі</p>
+      <p class="page-sub">Клікни на заявку, щоб відкрити деталі та коментарі</p>
 
       <div class="filter-row" id="filter-row"></div>
       <div id="mgr-error" class="error-box hidden"></div>
@@ -268,9 +297,50 @@
       <p class="page-sub">Як користуватись сервісом</p>
       <div class="help-text">
         <p><b>Створити заявку</b> — обери категорію, яка найточніше описує запит, заповни коротко суть і натисни "Надіслати". Заявка одразу з'явиться на дошці.</p>
-        <p><b>Коментарі</b> — під кожною заявкою можна відкрити коментарі і написати уточнення чи відповідь. Це бачать всі, хто відкриває заявку.</p>
-        <p><b>Всі заявки</b> — тут видно всі заявки, розподілені по статусах: Нова → В роботі → Виконано.</p>
+        <p><b>Відкриття заявки</b> — клік по заявці відкриває окрему сторінку з повною історією: зміни статусу і коментарі в одній стрічці, найновіше зверху.</p>
+        <p><b>Коментарі</b> — на сторінці заявки будь-хто може написати коментар, вказавши ім'я. Це бачать всі, хто відкриває заявку.</p>
         <p>Якщо не знайшов підходящу категорію — обери "Інше" і опиши запит детальніше.</p>
+      </div>
+    </section>
+
+    <section id="view-ticket" class="view">
+      <button class="btn-ghost" onclick="closeTicket()" style="margin-bottom:16px;">← Назад до заявок</button>
+      <div class="ticket-breadcrumb" id="ticket-breadcrumb"></div>
+      <div class="ticket-title-row">
+        <h1 class="ticket-title" id="ticket-title"></h1>
+        <span class="ticket-id" id="ticket-id"></span>
+      </div>
+
+      <div class="ticket-layout">
+        <div class="ticket-main">
+          <div class="ticket-desc-box">
+            <div class="ticket-desc-label">Опис заявки</div>
+            <div id="ticket-desc-text"></div>
+          </div>
+
+          <div class="comment-input-row">
+            <input type="text" id="ticket-c-name" placeholder="Твоє ім'я">
+            <input type="text" id="ticket-c-text" placeholder="Додати коментар..." onkeydown="if(event.key==='Enter'){submitTicketComment();}">
+            <button class="btn-primary" onclick="submitTicketComment()">Надіслати</button>
+          </div>
+
+          <div class="activity-label">Активність</div>
+          <div id="ticket-activity"></div>
+        </div>
+
+        <div class="ticket-sidebar">
+          <button class="status-btn" id="ticket-status-btn" onclick="cycleTicketStatus()"></button>
+
+          <div class="sidebar-block">
+            <div class="sidebar-label">Учасники заявки</div>
+            <div id="ticket-participants"></div>
+          </div>
+
+          <div class="sidebar-block">
+            <div class="sidebar-label">Подробиці</div>
+            <div id="ticket-details"></div>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -327,9 +397,9 @@ const CATEGORIES = [
     hint: "Опишіть запит, якщо жодна категорія не підійшла." },
 ];
 const STATUSES = [
-  { id: "new", label: "Нова" },
-  { id: "progress", label: "В роботі" },
-  { id: "done", label: "Виконано" },
+  { id: "new", label: "Нова", color: "#3B6EA8" },
+  { id: "progress", label: "В роботі", color: "#C98A2E" },
+  { id: "done", label: "Виконано", color: "#5C7A52" },
 ];
 
 let selectedCategory = null;
@@ -337,9 +407,12 @@ let currentFilter = "all";
 let allTasks = [];
 let unsubscribeBoard = null;
 let unsubscribeDash = null;
-let expandedComments = new Set();
+let unsubscribeTicket = null;
+let currentTicketId = null;
+let ticketReturnView = 'board';
 
 function catInfo(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
+function statusInfo(id) { return STATUSES.find(s => s.id === id) || STATUSES[0]; }
 
 function timeAgo(ts) {
   const diff = Math.floor((Date.now() - ts) / 1000);
@@ -347,6 +420,11 @@ function timeAgo(ts) {
   if (diff < 3600) return Math.floor(diff / 60) + " хв тому";
   if (diff < 86400) return Math.floor(diff / 3600) + " год тому";
   return Math.floor(diff / 86400) + " дн тому";
+}
+
+function fullDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('uk-UA') + ' ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
 }
 
 function escapeHtml(str) {
@@ -358,6 +436,10 @@ function escapeHtml(str) {
     .replace(/'/g, "&#039;");
 }
 
+function shortId(id) {
+  return '#' + id.slice(-6).toUpperCase();
+}
+
 const themeSwitch = document.getElementById('theme-switch');
 themeSwitch.addEventListener('change', () => {
   document.documentElement.setAttribute('data-theme', themeSwitch.checked ? 'dark' : 'light');
@@ -367,13 +449,18 @@ document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => switchView(btn.dataset.view));
 });
 
+function stopUnsubs() {
+  if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
+  if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
+  if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
+}
+
 function switchView(view) {
   document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + view).classList.add('active');
 
-  if (unsubscribeBoard) { unsubscribeBoard(); unsubscribeBoard = null; }
-  if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
+  stopUnsubs();
 
   if (view === 'dashboard') startDashboard();
   if (view === 'create') { renderTiles(); resetForm(); }
@@ -457,7 +544,7 @@ async function submitTask() {
       text: text,
       status: "new",
       createdAt: Date.now(),
-      comments: []
+      activity: [{ type: 'status', text: 'Заявку створено', createdAt: Date.now() }]
     });
     document.getElementById('emp-success').classList.remove('hidden');
     setTimeout(() => { resetForm(); }, 1800);
@@ -473,6 +560,7 @@ async function submitTask() {
 function startDashboard() {
   unsubscribeDash = tasksRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
     const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    allTasks = tasks;
     renderDashboard(tasks);
   });
 }
@@ -505,7 +593,7 @@ function renderDashboard(tasks) {
   if (tasks.length === 0) {
     recentList.innerHTML = '<div class="empty-note">Поки що немає заявок</div>';
   } else {
-    tasks.slice(0, 5).forEach(t => recentList.appendChild(renderCard(t, false)));
+    tasks.slice(0, 5).forEach(t => recentList.appendChild(renderCard(t, 'dashboard')));
   }
 }
 
@@ -544,49 +632,32 @@ function startBoard() {
   );
 }
 
-async function cycleStatus(id) {
-  const task = allTasks.find(t => t.id === id);
+async function changeStatus(id, event) {
+  if (event) event.stopPropagation();
+  const task = allTasks.find(t => t.id === id) || (currentTicketId === id ? window.__currentTicket : null);
   if (!task) return;
   const idx = STATUSES.findIndex(s => s.id === task.status);
-  const next = STATUSES[Math.min(idx + 1, STATUSES.length - 1)].id;
-  try { await tasksRef.doc(id).update({ status: next }); }
-  catch (e) {
-    document.getElementById('mgr-error').textContent = "Не вдалося оновити статус.";
-    document.getElementById('mgr-error').classList.remove('hidden');
-  }
-}
-
-async function deleteTask(id) {
-  try { await tasksRef.doc(id).delete(); }
-  catch (e) {
-    document.getElementById('mgr-error').textContent = "Не вдалося видалити заявку.";
-    document.getElementById('mgr-error').classList.remove('hidden');
-  }
-}
-
-function toggleComments(id) {
-  if (expandedComments.has(id)) expandedComments.delete(id);
-  else expandedComments.add(id);
-  const el = document.getElementById('comments-' + id);
-  if (el) el.classList.toggle('hidden');
-}
-
-async function addComment(id) {
-  const nameInput = document.getElementById('c-name-' + id);
-  const textInput = document.getElementById('c-text-' + id);
-  const name = nameInput.value.trim();
-  const text = textInput.value.trim();
-  if (!name || !text) return;
-  const comment = { author: name, text: text, createdAt: Date.now() };
+  const nextStatus = STATUSES[Math.min(idx + 1, STATUSES.length - 1)];
+  const entry = { type: 'status', text: 'Статус змінено на: ' + nextStatus.label, createdAt: Date.now() };
   try {
     await tasksRef.doc(id).update({
-      comments: firebase.firestore.FieldValue.arrayUnion(comment)
+      status: nextStatus.id,
+      activity: firebase.firestore.FieldValue.arrayUnion(entry)
     });
-    textInput.value = '';
   } catch (e) {
-    document.getElementById('mgr-error').textContent = "Не вдалося додати коментар.";
-    document.getElementById('mgr-error').classList.remove('hidden');
+    showError("Не вдалося оновити статус.");
   }
+}
+
+async function deleteTask(id, event) {
+  if (event) event.stopPropagation();
+  try { await tasksRef.doc(id).delete(); }
+  catch (e) { showError("Не вдалося видалити заявку."); }
+}
+
+function showError(msg) {
+  const el = document.getElementById('mgr-error');
+  if (el) { el.textContent = msg; el.classList.remove('hidden'); }
 }
 
 function renderBoard() {
@@ -606,15 +677,16 @@ function renderBoard() {
       empty.textContent = 'Порожньо';
       col.appendChild(empty);
     }
-    colTasks.forEach(t => col.appendChild(renderCard(t, true)));
+    colTasks.forEach(t => col.appendChild(renderCard(t, 'board')));
     columns.appendChild(col);
   });
 }
 
-function renderCard(task, withActions) {
+function renderCard(task, fromView) {
   const cat = catInfo(task.category);
   const statusIdx = STATUSES.findIndex(s => s.id === task.status);
-  const comments = task.comments || [];
+  const activity = task.activity || [];
+  const commentCount = activity.filter(a => a.type === 'comment').length;
 
   let html = '';
   html += '<div class="task-top">';
@@ -622,40 +694,128 @@ function renderCard(task, withActions) {
   if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
   html += '</div>';
   html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
-  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + '</span><span>🕐 ' + timeAgo(task.createdAt) + '</span></div>';
+  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
 
-  if (withActions) {
-    html += '<div class="task-actions">';
-    html += '<button class="btn-cycle' + (statusIdx === 2 ? ' done' : '') + '" onclick="cycleStatus(&quot;' + task.id + '&quot;)">';
-    html += statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
-    html += '</button>';
-    html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;)">✕</button>';
-    html += '</div>';
-  }
-
-  html += '<div class="comments-toggle-row">';
-  html += '<button class="btn-comments-toggle" onclick="toggleComments(&quot;' + task.id + '&quot;)">💬 Коментарі (' + comments.length + ')</button>';
-  html += '</div>';
-
-  html += '<div class="comments-list' + (expandedComments.has(task.id) ? '' : ' hidden') + '" id="comments-' + task.id + '">';
-  if (comments.length === 0) {
-    html += '<div class="empty-note">Коментарів ще немає</div>';
-  } else {
-    comments.slice().sort(function(a,b){ return a.createdAt - b.createdAt; }).forEach(function(c) {
-      html += '<div class="comment-item"><div class="comment-meta">' + escapeHtml(c.author) + ' · ' + timeAgo(c.createdAt) + '</div><div class="comment-text">' + escapeHtml(c.text) + '</div></div>';
-    });
-  }
-  html += '<div class="add-comment-box">';
-  html += '<input type="text" id="c-name-' + task.id + '" placeholder="Твоє ім\u2019я">';
-  html += '<textarea id="c-text-' + task.id + '" rows="2" placeholder="Написати коментар..."></textarea>';
-  html += '<button class="btn-add-comment" onclick="addComment(&quot;' + task.id + '&quot;)">Надіслати</button>';
-  html += '</div>';
+  html += '<div class="task-actions">';
+  html += '<button class="btn-cycle' + (statusIdx === 2 ? ' done' : '') + '" onclick="changeStatus(&quot;' + task.id + '&quot;, event)">';
+  html += statusIdx === 0 ? 'Взяти в роботу' : (statusIdx === 1 ? 'Позначити виконаним' : 'Виконано');
+  html += '</button>';
+  html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
   html += '</div>';
 
   const card = document.createElement('div');
   card.className = 'task-card';
   card.innerHTML = html;
+  card.addEventListener('click', () => openTicket(task.id, fromView));
   return card;
+}
+
+// ======= TICKET DETAIL =======
+function openTicket(id, fromView) {
+  ticketReturnView = fromView || 'board';
+  stopUnsubs();
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-ticket').classList.add('active');
+  currentTicketId = id;
+  unsubscribeTicket = tasksRef.doc(id).onSnapshot(doc => {
+    if (!doc.exists) { closeTicket(); return; }
+    const task = { id: doc.id, ...doc.data() };
+    window.__currentTicket = task;
+    renderTicket(task);
+  });
+}
+
+function closeTicket() {
+  stopUnsubs();
+  switchView(ticketReturnView);
+}
+
+function renderTicket(task) {
+  const cat = catInfo(task.category);
+  const status = statusInfo(task.status);
+  const statusIdx = STATUSES.findIndex(s => s.id === task.status);
+  const activity = task.activity || [];
+
+  document.getElementById('ticket-breadcrumb').innerHTML =
+    '<a onclick="closeTicket()">Всі заявки</a> &nbsp;›&nbsp; ' + cat.icon + ' ' + escapeHtml(cat.label);
+
+  document.getElementById('ticket-title').textContent = task.text.length > 70 ? task.text.slice(0, 70) + '…' : task.text;
+  document.getElementById('ticket-id').textContent = shortId(task.id);
+
+  document.getElementById('ticket-desc-text').textContent = task.text;
+
+  const statusBtn = document.getElementById('ticket-status-btn');
+  statusBtn.style.background = status.color;
+  statusBtn.textContent = statusIdx === 2 ? '✓ Виконано' : 'Статус: ' + status.label + ' →';
+  statusBtn.disabled = statusIdx === 2;
+  statusBtn.style.opacity = statusIdx === 2 ? '0.85' : '1';
+  statusBtn.style.cursor = statusIdx === 2 ? 'default' : 'pointer';
+
+  // participants
+  const participantsBox = document.getElementById('ticket-participants');
+  const commentAuthors = [...new Set(activity.filter(a => a.type === 'comment').map(a => a.author))].filter(a => a !== task.author);
+  let pHtml = '<div class="participant-row">👤 ' + escapeHtml(task.author) + '<span class="participant-role">· Автор</span></div>';
+  commentAuthors.forEach(a => {
+    pHtml += '<div class="participant-row">👤 ' + escapeHtml(a) + '<span class="participant-role">· Коментував(ла)</span></div>';
+  });
+  participantsBox.innerHTML = pHtml;
+
+  // details
+  const detailsBox = document.getElementById('ticket-details');
+  detailsBox.innerHTML =
+    '<div class="detail-row"><div class="detail-label">Категорія</div><div class="detail-value">' + cat.icon + ' ' + escapeHtml(cat.label) + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">Терміновість</div><div class="detail-value">' + (task.priority === 'urgent' ? '⚠ Термінове' : 'Звичайне') + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">Створено</div><div class="detail-value">' + fullDate(task.createdAt) + '</div></div>' +
+    '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>';
+
+  // activity feed, newest first
+  const sorted = activity.slice().sort((a, b) => b.createdAt - a.createdAt);
+  const feed = document.getElementById('ticket-activity');
+  if (sorted.length === 0) {
+    feed.innerHTML = '<div class="empty-note">Активності ще немає</div>';
+  } else {
+    feed.innerHTML = sorted.map((a, i) => {
+      const tag = i === 0 ? '<span class="latest-tag">Останнє</span>' : '';
+      if (a.type === 'comment') {
+        const initial = (a.author || '?').trim().charAt(0).toUpperCase();
+        return '<div class="activity-item"><div class="activity-comment">' +
+          '<div class="activity-avatar">' + initial + '</div>' +
+          '<div class="activity-comment-body">' +
+          '<div class="activity-comment-top"><span class="activity-comment-author">' + escapeHtml(a.author) + tag + '</span><span class="activity-comment-time">' + fullDate(a.createdAt) + '</span></div>' +
+          '<div class="activity-comment-text">' + escapeHtml(a.text) + '</div>' +
+          '</div></div></div>';
+      } else {
+        return '<div class="activity-item"><div class="activity-status-bar">' +
+          '<span class="activity-status-text">' + escapeHtml(a.text) + tag + '</span>' +
+          '<span class="activity-status-time">' + fullDate(a.createdAt) + '</span>' +
+          '</div></div>';
+      }
+    }).join('');
+  }
+}
+
+async function cycleTicketStatus() {
+  if (!currentTicketId) return;
+  await changeStatus(currentTicketId);
+}
+
+async function submitTicketComment() {
+  if (!currentTicketId) return;
+  const nameInput = document.getElementById('ticket-c-name');
+  const textInput = document.getElementById('ticket-c-text');
+  const name = nameInput.value.trim();
+  const text = textInput.value.trim();
+  if (!name || !text) return;
+  const entry = { type: 'comment', author: name, text: text, createdAt: Date.now() };
+  try {
+    await tasksRef.doc(currentTicketId).update({
+      activity: firebase.firestore.FieldValue.arrayUnion(entry)
+    });
+    textInput.value = '';
+  } catch (e) {
+    showError("Не вдалося додати коментар.");
+  }
 }
 
 startDashboard();
