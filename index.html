@@ -424,6 +424,13 @@
         <h3>Підтверджені</h3>
         <div id="approved-list"></div>
       </div>
+
+      <div class="section-block">
+        <h3>Обслуговування</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">Заявки, створені до додавання учасників, можуть не показуватись авторам у "Моїх заявках". Натисни раз, щоб виправити старі записи.</p>
+        <button class="btn-ghost" onclick="migrateOldTasks()">Полагодити старі заявки</button>
+        <div id="migrate-result" style="font-size:12.5px;color:var(--green);margin-top:8px;"></div>
+      </div>
     </section>
 
     <section id="view-help" class="view">
@@ -449,8 +456,14 @@
             <div class="ticket-desc-label">Опис заявки</div>
             <div id="ticket-desc-text"></div>
           </div>
+          <div id="ticket-image-preview-wrap" class="hidden" style="margin-bottom:10px;">
+            <img id="ticket-image-preview" style="max-width:160px;border-radius:8px;border:1.5px solid var(--border);display:block;">
+            <button class="btn-ghost" style="margin-top:6px;padding:5px 10px;font-size:11.5px;" onclick="clearPendingImage()">Прибрати фото</button>
+          </div>
           <div class="comment-input-row">
             <input type="text" id="ticket-c-text" placeholder="Додати коментар..." onkeydown="if(event.key==='Enter'){submitTicketComment();}">
+            <input type="file" accept="image/*" id="ticket-c-image" class="hidden" onchange="handleImagePick(event)">
+            <button class="btn-ghost" onclick="document.getElementById('ticket-c-image').click()" title="Додати фото">📷</button>
             <button class="btn-primary" onclick="submitTicketComment()">Надіслати</button>
           </div>
           <div class="activity-label">Активність</div>
@@ -461,6 +474,10 @@
           <div class="sidebar-block">
             <div class="sidebar-label">Учасники заявки</div>
             <div id="ticket-participants"></div>
+            <div id="ticket-add-participant" class="hidden" style="margin-top:10px;display:flex;gap:6px;">
+              <select id="participant-select" style="flex:1;padding:8px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;background:var(--content-bg);color:var(--ink);"></select>
+              <button class="btn-ghost" style="padding:8px 10px;font-size:12px;" onclick="addParticipant()">+</button>
+            </div>
           </div>
           <div class="sidebar-block">
             <div class="sidebar-label">Подробиці</div>
@@ -706,16 +723,19 @@ function stopUnsubs() {
 }
 
 // ======= APP BOOT =======
+function isPrivileged(role) { return role === 'manager' || role === 'admin'; }
+
 function bootApp() {
   startBranchesGlobal();
+  startUsersGlobal();
   checkUpcomingBirthdays();
   document.getElementById('sidebar-avatar').textContent = currentUserDoc.name.charAt(0).toUpperCase();
   document.getElementById('sidebar-name').textContent = currentUserDoc.name;
-  document.getElementById('sidebar-role').textContent = currentUserDoc.role === 'manager' ? 'Керівник' : 'Працівник';
+  document.getElementById('sidebar-role').textContent = currentUserDoc.role === 'manager' ? 'Керівник' : currentUserDoc.role === 'admin' ? 'Адмін' : 'Працівник';
 
   const nav = document.getElementById('nav-items');
   nav.innerHTML = '';
-  const items = currentUserDoc.role === 'manager'
+  const items = isPrivileged(currentUserDoc.role)
     ? [
         { view: 'dashboard', ic: '🏠', label: 'Дашборд' },
         { view: 'create', ic: '➕', label: 'Створити заявку' },
@@ -737,10 +757,10 @@ function bootApp() {
     nav.appendChild(btn);
   });
 
-  scopeMine = currentUserDoc.role !== 'manager';
+  scopeMine = !isPrivileged(currentUserDoc.role);
   document.getElementById('board-title').textContent = scopeMine ? 'Мої заявки' : 'Всі заявки';
 
-  switchView(currentUserDoc.role === 'manager' ? 'dashboard' : 'create');
+  switchView(isPrivileged(currentUserDoc.role) ? 'dashboard' : 'create');
 
   if (currentUserDoc.role === 'manager') watchPendingBadge();
 }
@@ -836,6 +856,7 @@ async function submitTask() {
     await tasksRef.add({
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
+      participantUids: [currentUser.uid],
       branchId: currentUserDoc.branchId || null,
       branchName: currentUserDoc.branchId ? branchName(currentUserDoc.branchId) : null,
       category: selectedCategory,
@@ -913,7 +934,7 @@ function startBoard() {
   const errBox = document.getElementById('mgr-error');
   errBox.classList.add('hidden');
   let q = tasksRef.orderBy('createdAt', 'desc');
-  if (scopeMine) q = tasksRef.where('authorUid', '==', currentUser.uid);
+  if (scopeMine) q = tasksRef.where('participantUids', 'array-contains', currentUser.uid);
   unsubscribeBoard = q.onSnapshot(
     snapshot => {
       allTasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -983,9 +1004,12 @@ function renderCard(task, fromView) {
   html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
   html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
-  html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
-  if (currentUserDoc && currentUserDoc.role === 'manager') {
+  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+    html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
     html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
+  } else {
+    const st = statusInfo(task.status);
+    html += '<span class="cat-badge" style="background:' + st.color + ';flex:1;text-align:center;padding:8px;">' + st.label + '</span>';
   }
   html += '</div>';
 
@@ -1030,13 +1054,38 @@ function renderTicket(task) {
   document.getElementById('ticket-desc-text').textContent = task.text;
 
   const sel = document.getElementById('ticket-status-select');
-  sel.innerHTML = statusOptionsHtml(task.status);
-  sel.style.background = status.color;
+  const addParticipantBox = document.getElementById('ticket-add-participant');
+  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+    sel.classList.remove('hidden');
+    sel.disabled = false;
+    sel.innerHTML = statusOptionsHtml(task.status);
+    sel.style.background = status.color;
+    addParticipantBox.classList.remove('hidden');
+    const psel = document.getElementById('participant-select');
+    const already = task.participantUids || [task.authorUid];
+    const candidates = allUsersCache.filter(u => u.approved && !already.includes(u.id));
+    psel.innerHTML = candidates.length === 0 ? '<option value="">Немає кого додати</option>' :
+      candidates.map(u => '<option value="' + u.id + '">' + escapeHtml(u.name) + '</option>').join('');
+  } else {
+    sel.classList.remove('hidden');
+    sel.disabled = true;
+    sel.innerHTML = '<option>' + escapeHtml(status.label) + '</option>';
+    sel.style.background = status.color;
+    sel.style.opacity = '0.85';
+    addParticipantBox.classList.add('hidden');
+  }
 
   const participantsBox = document.getElementById('ticket-participants');
-  const commentAuthors = [...new Set(activity.filter(a => a.type === 'comment').map(a => a.author))].filter(a => a !== task.author);
-  let pHtml = '<div class="participant-row">👤 ' + escapeHtml(task.author) + '<span class="participant-role">· Автор</span></div>';
-  commentAuthors.forEach(a => { pHtml += '<div class="participant-row">👤 ' + escapeHtml(a) + '<span class="participant-role">· Коментував(ла)</span></div>'; });
+  const participantIds = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
+  let pHtml = '';
+  participantIds.forEach(uid => {
+    const isAuthor = uid === task.authorUid;
+    const pName = uid === task.authorUid ? task.author : userName(uid);
+    const canRemove = !isAuthor && currentUserDoc && isPrivileged(currentUserDoc.role);
+    pHtml += '<div class="participant-row"><span>👤 ' + escapeHtml(pName) + '<span class="participant-role">· ' + (isAuthor ? 'Автор' : 'Учасник') + '</span></span>' +
+      (canRemove ? '<button class="btn-delete" style="margin-left:auto;padding:3px 7px;" title="Прибрати" onclick="removeParticipant(&quot;' + uid + '&quot;)">✕</button>' : '') +
+      '</div>';
+  });
   participantsBox.innerHTML = pHtml;
 
   document.getElementById('ticket-details').innerHTML =
@@ -1053,22 +1102,124 @@ function renderTicket(task) {
     const tag = i === 0 ? '<span class="latest-tag">Останнє</span>' : '';
     if (a.type === 'comment') {
       const initial = (a.author || '?').trim().charAt(0).toUpperCase();
-      return '<div class="activity-item"><div class="activity-comment"><div class="activity-avatar">' + initial + '</div><div class="activity-comment-body"><div class="activity-comment-top"><span class="activity-comment-author">' + escapeHtml(a.author) + tag + '</span><span class="activity-comment-time">' + fullDate(a.createdAt) + '</span></div><div class="activity-comment-text">' + escapeHtml(a.text) + '</div></div></div></div>';
+      const imgHtml = a.image ? '<img src="' + a.image + '" style="max-width:100%;border-radius:8px;margin-top:8px;cursor:pointer;display:block;" onclick="window.open(this.src)">' : '';
+      const textHtml = a.text ? '<div class="activity-comment-text">' + escapeHtml(a.text) + '</div>' : '';
+      return '<div class="activity-item"><div class="activity-comment"><div class="activity-avatar">' + initial + '</div><div class="activity-comment-body"><div class="activity-comment-top"><span class="activity-comment-author">' + escapeHtml(a.author) + tag + '</span><span class="activity-comment-time">' + fullDate(a.createdAt) + '</span></div>' + textHtml + imgHtml + '</div></div></div>';
     }
     return '<div class="activity-item"><div class="activity-status-bar"><span class="activity-status-text">' + escapeHtml(a.text) + tag + '</span><span class="activity-status-time">' + fullDate(a.createdAt) + '</span></div></div>';
   }).join('');
+}
+
+async function addParticipant() {
+  if (!currentTicketId) return;
+  const sel = document.getElementById('participant-select');
+  const uid = sel.value;
+  if (!uid) return;
+  const person = allUsersCache.find(u => u.id === uid);
+  const entry = { type: 'status', text: (person ? person.name : 'Працівника') + ' додано як учасника заявки', createdAt: Date.now() };
+  try {
+    await tasksRef.doc(currentTicketId).update({
+      participantUids: firebase.firestore.FieldValue.arrayUnion(uid),
+      activity: firebase.firestore.FieldValue.arrayUnion(entry)
+    });
+  } catch (e) { showError('Не вдалося додати учасника.'); }
+}
+
+async function removeParticipant(uid) {
+  if (!currentTicketId) return;
+  try {
+    await tasksRef.doc(currentTicketId).update({ participantUids: firebase.firestore.FieldValue.arrayRemove(uid) });
+  } catch (e) { showError('Не вдалося прибрати учасника.'); }
+}
+
+// ======= COMMENT IMAGE ATTACH =======
+let pendingCommentImage = null;
+
+function readAndCompressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width, height = img.height;
+        const maxDim = 900;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else { width = Math.round(width * maxDim / height); height = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.6));
+      };
+      img.onerror = () => reject(new Error('Не вдалося прочитати зображення.'));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error('Не вдалося прочитати файл.'));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleImagePick(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await readAndCompressImage(file);
+    if (dataUrl.length > 700000) {
+      alert('Фото занадто велике навіть після стиснення. Спробуй інше, простіше фото.');
+      event.target.value = '';
+      return;
+    }
+    pendingCommentImage = dataUrl;
+    document.getElementById('ticket-image-preview').src = dataUrl;
+    document.getElementById('ticket-image-preview-wrap').classList.remove('hidden');
+  } catch (e) {
+    alert('Не вдалося обробити фото: ' + e.message);
+  }
+}
+
+function clearPendingImage() {
+  pendingCommentImage = null;
+  document.getElementById('ticket-c-image').value = '';
+  document.getElementById('ticket-image-preview-wrap').classList.add('hidden');
 }
 
 async function submitTicketComment() {
   if (!currentTicketId) return;
   const textInput = document.getElementById('ticket-c-text');
   const text = textInput.value.trim();
-  if (!text) return;
+  if (!text && !pendingCommentImage) return;
   const entry = { type: 'comment', author: currentUserDoc.name, text: text, createdAt: Date.now() };
+  if (pendingCommentImage) entry.image = pendingCommentImage;
   try {
     await tasksRef.doc(currentTicketId).update({ activity: firebase.firestore.FieldValue.arrayUnion(entry) });
     textInput.value = '';
-  } catch (e) { showError("Не вдалося додати коментар."); }
+    clearPendingImage();
+  } catch (e) { showError("Не вдалося додати коментар. Можливо, фото занадто велике для однієї заявки."); }
+}
+
+// ======= USERS (global cache, needed for participants/permissions/emails) =======
+let allUsersCache = [];
+function startUsersGlobal() {
+  usersRef.onSnapshot(snapshot => {
+    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    allUsersCache = users;
+    teamUsersCache = users;
+    if (currentView === 'team') { renderTeam(users); renderBranchesList(); }
+    if (currentUser && currentUserDoc) {
+      const me = users.find(u => u.id === currentUser.uid);
+      if (me) currentUserDoc = me;
+    }
+  }, err => {
+    const el = document.getElementById('pending-list');
+    if (el) el.innerHTML = '<div class="empty-note">Не вдалося завантажити: ' + err.message + '</div>';
+  });
+}
+
+function userName(uid) {
+  const u = allUsersCache.find(x => x.id === uid);
+  return u ? u.name : 'Невідомий';
 }
 
 // ======= TEAM =======
@@ -1076,15 +1227,7 @@ function startTeam() {
   renderBranchesList();
   const sel1 = document.getElementById('new-emp-branch');
   if (sel1) sel1.innerHTML = branchOptionsHtml('');
-  unsubscribeTeam = usersRef.onSnapshot(snapshot => {
-    const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-    teamUsersCache = users;
-    renderTeam(users);
-    renderBranchesList();
-  }, err => {
-    document.getElementById('pending-list').innerHTML = '<div class="empty-note">Не вдалося завантажити: ' + err.message + '</div>';
-  });
+  renderTeam(teamUsersCache);
 }
 
 function branchName(branchId) {
@@ -1202,11 +1345,42 @@ function renderTeam(users) {
   if (approvedBox) approvedBox.innerHTML = approved.length === 0 ? '<div class="empty-note">Поки що нікого немає</div>' :
     approved.map(u => {
       const bName = u.branchId ? branchName(u.branchId) : null;
-      return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + (bName ? ' <span class="role-tag" style="margin-left:4px;">' + escapeHtml(bName) + '</span>' : '') + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span>' +
+      const roleLabel = u.role === 'manager' ? 'Керівник' : u.role === 'admin' ? 'Адмін' : 'Працівник';
+      let adminBtn = '';
+      if (u.role === 'employee') adminBtn = '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="setAdminRole(&quot;' + u.id + '&quot;, true)">Зробити адміном</button>';
+      if (u.role === 'admin') adminBtn = '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="setAdminRole(&quot;' + u.id + '&quot;, false)">Прибрати адміна</button>';
+      return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : u.role === 'admin' ? '#8A5CA8' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + (bName ? ' <span class="role-tag" style="margin-left:4px;">' + escapeHtml(bName) + '</span>' : '') + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span class="role-tag">' + roleLabel + '</span>' +
+        adminBtn +
         (u.role === 'manager' ? '' : '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="openEditUser(&quot;' + u.id + '&quot;)">Редагувати</button>') +
         (u.id === (currentUser ? currentUser.uid : '') ? '' : '<button class="btn-delete" title="Видалити зі списку" onclick="deleteUserDoc(&quot;' + u.id + '&quot;)">✕</button>') +
         '</div></div>';
     }).join('');
+}
+
+async function setAdminRole(uid, makeAdmin) {
+  await usersRef.doc(uid).update({ role: makeAdmin ? 'admin' : 'employee' });
+}
+
+async function migrateOldTasks() {
+  const resultBox = document.getElementById('migrate-result');
+  resultBox.textContent = 'Перевіряю...';
+  try {
+    const snap = await tasksRef.get();
+    let fixed = 0;
+    const batchPromises = [];
+    snap.docs.forEach(doc => {
+      const data = doc.data();
+      if (!data.participantUids && data.authorUid) {
+        batchPromises.push(tasksRef.doc(doc.id).update({ participantUids: [data.authorUid] }));
+        fixed++;
+      }
+    });
+    await Promise.all(batchPromises);
+    resultBox.textContent = fixed === 0 ? 'Усе вже гаразд, старих заявок для виправлення не знайдено.' : 'Виправлено ' + fixed + ' заявок(и).';
+  } catch (e) {
+    resultBox.style.color = 'var(--red)';
+    resultBox.textContent = 'Помилка: ' + e.message;
+  }
 }
 
 function openEditUser(uid) {
