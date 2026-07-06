@@ -8,6 +8,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
 <style>
   :root {
@@ -510,6 +511,31 @@ const branchesRef = db.collection('branches');
 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = secondaryApp.auth();
 
+// ======= EMAILJS =======
+const EMAILJS_SERVICE_ID = 'service_6i4k8gn';
+const EMAILJS_TEMPLATE_ID = 'template_wy235wb';
+const EMAILJS_PUBLIC_KEY = '8QatBjMzyPuPjTsgm';
+if (typeof emailjs !== 'undefined') emailjs.init(EMAILJS_PUBLIC_KEY);
+
+async function notifyEmails(recipientUids, subject, message) {
+  if (typeof emailjs === 'undefined') return;
+  const seen = new Set();
+  const list = recipientUids || [];
+  for (const uid of list) {
+    if (!uid || (currentUser && uid === currentUser.uid) || seen.has(uid)) continue;
+    seen.add(uid);
+    const u = allUsersCache.find(x => x.id === uid);
+    if (!u) continue;
+    const email = u.workEmail || u.email;
+    if (!email) continue;
+    try {
+      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
+        to_email: email, to_name: u.name, subject: subject, message: message
+      });
+    } catch (e) { console.error('EmailJS error:', e); }
+  }
+}
+
 const GROUPS = { tech: "Технічне / магазин", hr: "Кадрові питання", growth: "Розвиток", other: "Інше" };
 const CATEGORIES = [
   { id: "repair", label: "Ремонт обладнання", group: "tech", color: "#B4482F", icon: "🔧", hint: "Напишіть, яке обладнання зламалось і в чому проблема (каса, принтер, кондиціонер тощо)." },
@@ -866,6 +892,9 @@ async function submitTask() {
       createdAt: Date.now(),
       activity: [{ type: 'status', text: 'Заявку створено', createdAt: Date.now() }]
     });
+    const privilegedUids = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
+    notifyEmails(privilegedUids, 'Нова заявка: ' + catInfo(selectedCategory).label,
+      currentUserDoc.name + ' створив(ла) нову заявку "' + catInfo(selectedCategory).label + '":\n\n' + text);
     document.getElementById('emp-success').classList.remove('hidden');
     setTimeout(() => { resetForm(); }, 1800);
   } catch (e) {
@@ -956,6 +985,9 @@ async function changeStatusTo(id, newStatusId) {
   const entry = { type: 'status', text: 'Статус змінено на: ' + newStatus.label, createdAt: Date.now() };
   try {
     await tasksRef.doc(id).update({ status: newStatusId, activity: firebase.firestore.FieldValue.arrayUnion(entry) });
+    const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
+    notifyEmails(recipients, 'Зміна статусу заявки',
+      (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '":\n\n' + task.text);
   } catch (e) { showError("Не вдалося оновити статус."); }
 }
 
@@ -1193,6 +1225,12 @@ async function submitTicketComment() {
   if (pendingCommentImage) entry.image = pendingCommentImage;
   try {
     await tasksRef.doc(currentTicketId).update({ activity: firebase.firestore.FieldValue.arrayUnion(entry) });
+    const task = window.__currentTicket;
+    if (task) {
+      const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
+      notifyEmails(recipients, 'Новий коментар до заявки',
+        currentUserDoc.name + ' написав(ла) коментар' + (pendingCommentImage ? ' (+фото)' : '') + ':\n\n' + (text || '(без тексту)') + '\n\nЗаявка: ' + task.text);
+    }
     textInput.value = '';
     clearPendingImage();
   } catch (e) { showError("Не вдалося додати коментар. Можливо, фото занадто велике для однієї заявки."); }
