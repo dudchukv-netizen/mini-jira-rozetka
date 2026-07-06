@@ -351,7 +351,59 @@
 
     <section id="view-team" class="view">
       <h1 class="page-title">Працівники</h1>
-      <p class="page-sub">Підтвердження реєстрацій та список команди</p>
+      <p class="page-sub">Підрозділи, створення профілів та підтвердження реєстрацій</p>
+
+      <div class="section-block">
+        <h3>Підрозділи</h3>
+        <div id="branches-list" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="new-branch-name" placeholder="Наприклад: ТВ Чернівці Головна 200" style="flex:1;min-width:220px;margin:0;">
+          <button class="btn-primary" onclick="addBranch()">+ Додати підрозділ</button>
+        </div>
+        <div id="branch-error" class="error-box hidden"></div>
+      </div>
+
+      <div class="section-block">
+        <h3>Створити профіль працівника</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+          <div><label class="field-label" style="margin-top:0;">Ім'я</label><input type="text" id="new-emp-firstname" placeholder="Олена"></div>
+          <div><label class="field-label" style="margin-top:0;">Прізвище</label><input type="text" id="new-emp-lastname" placeholder="Коваль"></div>
+          <div><label class="field-label" style="margin-top:0;">Email</label><input type="email" id="new-emp-email"></div>
+          <div><label class="field-label" style="margin-top:0;">Пароль</label><input type="text" id="new-emp-password" placeholder="Мінімум 6 символів"></div>
+          <div>
+            <label class="field-label" style="margin-top:0;">Підрозділ</label>
+            <select id="new-emp-branch" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+              <option value="">Без підрозділу</option>
+            </select>
+          </div>
+        </div>
+        <div class="btn-submit-row"><button class="btn-primary" onclick="createEmployeeAccount()" id="btn-create-emp">Створити профіль</button></div>
+        <div id="create-emp-error" class="error-box hidden"></div>
+        <div id="create-emp-success" class="success-box hidden"></div>
+      </div>
+
+      <div id="edit-user-panel" class="section-block hidden">
+        <h3>Редагування профілю</h3>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
+          <div><label class="field-label" style="margin-top:0;">Ім'я</label><input type="text" id="edit-firstname"></div>
+          <div><label class="field-label" style="margin-top:0;">Прізвище</label><input type="text" id="edit-lastname"></div>
+          <div><label class="field-label" style="margin-top:0;">Телефон</label><input type="text" id="edit-phone" placeholder="+380..."></div>
+          <div><label class="field-label" style="margin-top:0;">День народження</label><input type="date" id="edit-birthday"></div>
+          <div>
+            <label class="field-label" style="margin-top:0;">Підрозділ</label>
+            <select id="edit-branch" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+              <option value="">Без підрозділу</option>
+            </select>
+          </div>
+        </div>
+        <label class="field-label">Коментар</label>
+        <textarea id="edit-comment" rows="3" placeholder="Будь-які нотатки про працівника"></textarea>
+        <div class="btn-submit-row">
+          <button class="btn-primary" onclick="saveUserEdit()">Зберегти</button>
+          <button class="btn-ghost" onclick="cancelEditUser()">Скасувати</button>
+        </div>
+      </div>
+
       <div class="section-block">
         <h3>Очікують підтвердження</h3>
         <div id="pending-list"></div>
@@ -423,6 +475,11 @@ const db = firebase.firestore();
 const auth = firebase.auth();
 const tasksRef = db.collection('tasks');
 const usersRef = db.collection('users');
+const branchesRef = db.collection('branches');
+
+// Secondary app instance so creating an employee account doesn't log the manager out
+const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
+const secondaryAuth = secondaryApp.auth();
 
 const GROUPS = { tech: "Технічне / магазин", hr: "Кадрові питання", growth: "Розвиток", other: "Інше" };
 const CATEGORIES = [
@@ -459,6 +516,10 @@ let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, u
 let currentTicketId = null;
 let ticketReturnView = 'board';
 let currentView = 'dashboard';
+let branchesCache = [];
+let teamUsersCache = [];
+let editingUserId = null;
+let unsubscribeBranches = null;
 
 function catInfo(id) { return CATEGORIES.find(c => c.id === id) || CATEGORIES[CATEGORIES.length - 1]; }
 function statusInfo(id) { return STATUSES.find(s => s.id === id) || STATUSES[0]; }
@@ -617,6 +678,7 @@ function stopUnsubs() {
 
 // ======= APP BOOT =======
 function bootApp() {
+  startBranchesGlobal();
   document.getElementById('sidebar-avatar').textContent = currentUserDoc.name.charAt(0).toUpperCase();
   document.getElementById('sidebar-name').textContent = currentUserDoc.name;
   document.getElementById('sidebar-role').textContent = currentUserDoc.role === 'manager' ? 'Керівник' : 'Працівник';
@@ -744,6 +806,8 @@ async function submitTask() {
     await tasksRef.add({
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
+      branchId: currentUserDoc.branchId || null,
+      branchName: currentUserDoc.branchId ? branchName(currentUserDoc.branchId) : null,
       category: selectedCategory,
       priority: urgent ? "urgent" : "normal",
       text: text,
@@ -887,7 +951,7 @@ function renderCard(task, fromView) {
   if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
   html += '</div>';
   html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
-  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
+  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
   html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
   if (currentUserDoc && currentUserDoc.role === 'manager') {
@@ -947,6 +1011,7 @@ function renderTicket(task) {
 
   document.getElementById('ticket-details').innerHTML =
     '<div class="detail-row"><div class="detail-label">Категорія</div><div class="detail-value">' + cat.icon + ' ' + escapeHtml(cat.label) + '</div></div>' +
+    (task.branchName ? '<div class="detail-row"><div class="detail-label">Підрозділ</div><div class="detail-value">🏬 ' + escapeHtml(task.branchName) + '</div></div>' : '') +
     '<div class="detail-row"><div class="detail-label">Терміновість</div><div class="detail-value">' + (task.priority === 'urgent' ? '⚠ Термінове' : 'Звичайне') + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Створено</div><div class="detail-value">' + fullDate(task.createdAt) + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>';
@@ -978,28 +1043,176 @@ async function submitTicketComment() {
 
 // ======= TEAM =======
 function startTeam() {
+  renderBranchesList();
+  const sel1 = document.getElementById('new-emp-branch');
+  if (sel1) sel1.innerHTML = branchOptionsHtml('');
   unsubscribeTeam = usersRef.onSnapshot(snapshot => {
     const users = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
     users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    teamUsersCache = users;
     renderTeam(users);
   }, err => {
     document.getElementById('pending-list').innerHTML = '<div class="empty-note">Не вдалося завантажити: ' + err.message + '</div>';
   });
 }
 
+function branchName(branchId) {
+  const b = branchesCache.find(x => x.id === branchId);
+  return b ? b.name : null;
+}
+
+function branchOptionsHtml(selectedId) {
+  let html = '<option value=""' + (!selectedId ? ' selected' : '') + '>Без підрозділу</option>';
+  branchesCache.forEach(b => {
+    html += '<option value="' + b.id + '"' + (b.id === selectedId ? ' selected' : '') + '>' + escapeHtml(b.name) + '</option>';
+  });
+  return html;
+}
+
+function startBranchesGlobal() {
+  branchesRef.onSnapshot(snapshot => {
+    branchesCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    branchesCache.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    renderBranchesList();
+    const sel1 = document.getElementById('new-emp-branch');
+    if (sel1) sel1.innerHTML = branchOptionsHtml('');
+    renderTeam(teamUsersCache);
+  });
+}
+
+function renderBranchesList() {
+  const box = document.getElementById('branches-list');
+  if (!box) return;
+  if (branchesCache.length === 0) {
+    box.innerHTML = '<div class="empty-note">Ще немає жодного підрозділу — додай перший нижче</div>';
+    return;
+  }
+  box.innerHTML = branchesCache.map(b => {
+    const count = teamUsersCache.filter(u => u.branchId === b.id).length;
+    return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#3B8C82;">🏬</div><div><div class="team-row-name">' + escapeHtml(b.name) + '</div><div class="team-row-email">' + count + ' працівник(ів)</div></div></div><button class="btn-delete" title="Видалити підрозділ" onclick="deleteBranch(&quot;' + b.id + '&quot;)">✕</button></div>';
+  }).join('');
+}
+
+async function addBranch() {
+  const input = document.getElementById('new-branch-name');
+  const name = input.value.trim();
+  const errBox = document.getElementById('branch-error');
+  errBox.classList.add('hidden');
+  if (!name) { errBox.textContent = "Впиши назву підрозділу."; errBox.classList.remove('hidden'); return; }
+  try {
+    await branchesRef.add({ name: name, createdAt: Date.now() });
+    input.value = '';
+  } catch (e) { errBox.textContent = "Не вдалося додати підрозділ: " + e.message; errBox.classList.remove('hidden'); }
+}
+
+async function deleteBranch(id) {
+  if (!confirm('Видалити цей підрозділ? У працівників, що були прив\u2019язані до нього, підрозділ стане порожнім.')) return;
+  await branchesRef.doc(id).delete();
+}
+
+async function createEmployeeAccount() {
+  const firstName = document.getElementById('new-emp-firstname').value.trim();
+  const lastName = document.getElementById('new-emp-lastname').value.trim();
+  const email = document.getElementById('new-emp-email').value.trim();
+  const password = document.getElementById('new-emp-password').value;
+  const branchId = document.getElementById('new-emp-branch').value || null;
+  const errBox = document.getElementById('create-emp-error');
+  const okBox = document.getElementById('create-emp-success');
+  const btn = document.getElementById('btn-create-emp');
+  errBox.classList.add('hidden'); okBox.classList.add('hidden');
+
+  if (!firstName || !email || !password) {
+    errBox.textContent = "Заповни хоча б ім'я, email і пароль.";
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Створюю...";
+  try {
+    const cred = await secondaryAuth.createUserWithEmailAndPassword(email, password);
+    const uid = cred.user.uid;
+    const fullName = (firstName + ' ' + lastName).trim();
+    await usersRef.doc(uid).set({
+      name: fullName, firstName: firstName, lastName: lastName,
+      email: email, role: 'employee', approved: true,
+      branchId: branchId, createdAt: Date.now()
+    });
+    await secondaryAuth.signOut();
+    okBox.textContent = "Профіль для " + fullName + " створено. Передай працівнику email і пароль для входу.";
+    okBox.classList.remove('hidden');
+    document.getElementById('new-emp-firstname').value = '';
+    document.getElementById('new-emp-lastname').value = '';
+    document.getElementById('new-emp-email').value = '';
+    document.getElementById('new-emp-password').value = '';
+    document.getElementById('new-emp-branch').value = '';
+  } catch (e) {
+    errBox.textContent = authErrorMsg(e);
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = "Створити профіль";
+  }
+}
+
 function renderTeam(users) {
-  const safe = u => ({ id: u.id, name: u.name || '(без імені)', email: u.email || '—', role: u.role || 'employee', approved: !!u.approved, rejected: !!u.rejected });
+  const safe = u => ({
+    id: u.id, name: u.name || '(без імені)', email: u.email || '—',
+    role: u.role || 'employee', approved: !!u.approved, rejected: !!u.rejected,
+    branchId: u.branchId || null
+  });
   const list = users.map(safe);
   const pending = list.filter(u => !u.approved && !u.rejected && u.role !== 'manager');
   const approved = list.filter(u => u.approved);
 
   const pendingBox = document.getElementById('pending-list');
-  pendingBox.innerHTML = pending.length === 0 ? '<div class="empty-note">Немає нових заявок на реєстрацію</div>' :
+  if (pendingBox) pendingBox.innerHTML = pending.length === 0 ? '<div class="empty-note">Немає нових заявок на реєстрацію</div>' :
     pending.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#8A5CA8;">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;gap:8px;"><button class="btn-approve" onclick="approveUser(&quot;' + u.id + '&quot;)">Підтвердити</button><button class="btn-reject" onclick="rejectUser(&quot;' + u.id + '&quot;)">Відхилити</button></div></div>').join('');
 
   const approvedBox = document.getElementById('approved-list');
-  approvedBox.innerHTML = approved.length === 0 ? '<div class="empty-note">Поки що нікого немає</div>' :
-    approved.map(u => '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;align-items:center;gap:10px;"><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span>' + (u.id === (currentUser ? currentUser.uid : '') ? '' : '<button class="btn-delete" title="Видалити зі списку" onclick="deleteUserDoc(&quot;' + u.id + '&quot;)">✕</button>') + '</div></div>').join('');
+  if (approvedBox) approvedBox.innerHTML = approved.length === 0 ? '<div class="empty-note">Поки що нікого немає</div>' :
+    approved.map(u => {
+      const bName = u.branchId ? branchName(u.branchId) : null;
+      return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:' + (u.role === 'manager' ? '#C98A2E' : '#3B6EA8') + ';">' + u.name.charAt(0).toUpperCase() + '</div><div><div class="team-row-name">' + escapeHtml(u.name) + (bName ? ' <span class="role-tag" style="margin-left:4px;">' + escapeHtml(bName) + '</span>' : '') + '</div><div class="team-row-email">' + escapeHtml(u.email) + '</div></div></div><div style="display:flex;align-items:center;gap:8px;"><span class="role-tag">' + (u.role === 'manager' ? 'Керівник' : 'Працівник') + '</span>' +
+        (u.role === 'manager' ? '' : '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="openEditUser(&quot;' + u.id + '&quot;)">Редагувати</button>') +
+        (u.id === (currentUser ? currentUser.uid : '') ? '' : '<button class="btn-delete" title="Видалити зі списку" onclick="deleteUserDoc(&quot;' + u.id + '&quot;)">✕</button>') +
+        '</div></div>';
+    }).join('');
+}
+
+function openEditUser(uid) {
+  const u = teamUsersCache.find(x => x.id === uid);
+  if (!u) return;
+  editingUserId = uid;
+  document.getElementById('edit-firstname').value = u.firstName || u.name || '';
+  document.getElementById('edit-lastname').value = u.lastName || '';
+  document.getElementById('edit-phone').value = u.phone || '';
+  document.getElementById('edit-birthday').value = u.birthday || '';
+  document.getElementById('edit-comment').value = u.comment || '';
+  document.getElementById('edit-branch').innerHTML = branchOptionsHtml(u.branchId || '');
+  document.getElementById('edit-user-panel').classList.remove('hidden');
+  document.getElementById('edit-user-panel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelEditUser() {
+  editingUserId = null;
+  document.getElementById('edit-user-panel').classList.add('hidden');
+}
+
+async function saveUserEdit() {
+  if (!editingUserId) return;
+  const firstName = document.getElementById('edit-firstname').value.trim();
+  const lastName = document.getElementById('edit-lastname').value.trim();
+  const phone = document.getElementById('edit-phone').value.trim();
+  const birthday = document.getElementById('edit-birthday').value;
+  const comment = document.getElementById('edit-comment').value.trim();
+  const branchId = document.getElementById('edit-branch').value || null;
+  const fullName = (firstName + ' ' + lastName).trim() || firstName;
+  try {
+    await usersRef.doc(editingUserId).update({
+      firstName: firstName, lastName: lastName, name: fullName,
+      phone: phone, birthday: birthday, comment: comment, branchId: branchId
+    });
+    cancelEditUser();
+  } catch (e) { alert("Не вдалося зберегти: " + e.message); }
 }
 
 async function approveUser(uid) { await usersRef.doc(uid).update({ approved: true, rejected: false }); }
