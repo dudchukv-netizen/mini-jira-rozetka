@@ -258,9 +258,18 @@
     </div>
 
     <div id="form-register" class="hidden">
-      <div class="auth-field"><label>Ім'я</label><input type="text" id="reg-name" placeholder="Наприклад, Олена"></div>
-      <div class="auth-field"><label>Email</label><input type="email" id="reg-email"></div>
-      <div class="auth-field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Мінімум 6 символів"></div>
+      <div class="auth-field"><label>Ім'я *</label><input type="text" id="reg-firstname" placeholder="Олена"></div>
+      <div class="auth-field"><label>Прізвище *</label><input type="text" id="reg-lastname" placeholder="Коваль"></div>
+      <div class="auth-field"><label>Email *</label><input type="email" id="reg-email"></div>
+      <div class="auth-field"><label>Пароль *</label><input type="password" id="reg-password" placeholder="Мінімум 6 символів"></div>
+      <div class="auth-field"><label>Телефон</label><input type="text" id="reg-phone" placeholder="+380..."></div>
+      <div class="auth-field"><label>День народження</label><input type="date" id="reg-birthday"></div>
+      <div class="auth-field">
+        <label>Підрозділ</label>
+        <select id="reg-branch" style="width:100%;padding:11px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+          <option value="">Без підрозділу</option>
+        </select>
+      </div>
       <button class="btn-primary wide" onclick="doRegister()" id="btn-register">Зареєструватись</button>
       <div class="auth-hint">Перша людина, що зареєструється — стає керівником. Всі наступні очікують підтвердження.</div>
     </div>
@@ -289,6 +298,8 @@
         <div class="brand-sub">Внутрішній сервіс</div>
       </div>
     </div>
+
+    <div id="birthday-alert" class="hidden" style="background:#8A5CA822;border:1px solid #8A5CA8;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:var(--sidebar-text);line-height:1.5;"></div>
 
     <div id="nav-items"></div>
 
@@ -388,6 +399,7 @@
           <div><label class="field-label" style="margin-top:0;">Ім'я</label><input type="text" id="edit-firstname"></div>
           <div><label class="field-label" style="margin-top:0;">Прізвище</label><input type="text" id="edit-lastname"></div>
           <div><label class="field-label" style="margin-top:0;">Телефон</label><input type="text" id="edit-phone" placeholder="+380..."></div>
+          <div><label class="field-label" style="margin-top:0;">Робоча пошта (для листів)</label><input type="email" id="edit-workemail" placeholder="name@work.com"></div>
           <div><label class="field-label" style="margin-top:0;">День народження</label><input type="date" id="edit-birthday"></div>
           <div>
             <label class="field-label" style="margin-top:0;">Підрозділ</label>
@@ -563,23 +575,40 @@ function setAuthTab(tab) {
   document.getElementById('form-login').classList.toggle('hidden', tab !== 'login');
   document.getElementById('form-register').classList.toggle('hidden', tab !== 'register');
   document.getElementById('auth-error').classList.add('hidden');
+  if (tab === 'register') loadBranchesForRegister();
+}
+
+async function loadBranchesForRegister() {
+  try {
+    const snap = await branchesRef.get();
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    const sel = document.getElementById('reg-branch');
+    sel.innerHTML = '<option value="">Без підрозділу</option>' + list.map(b => '<option value="' + b.id + '">' + escapeHtml(b.name) + '</option>').join('');
+  } catch (e) { /* лишаємо тільки "Без підрозділу" */ }
 }
 
 async function doRegister() {
-  const name = document.getElementById('reg-name').value.trim();
+  const firstName = document.getElementById('reg-firstname').value.trim();
+  const lastName = document.getElementById('reg-lastname').value.trim();
   const email = document.getElementById('reg-email').value.trim();
   const password = document.getElementById('reg-password').value;
+  const phone = document.getElementById('reg-phone').value.trim();
+  const birthday = document.getElementById('reg-birthday').value;
+  const branchId = document.getElementById('reg-branch').value || null;
   const errBox = document.getElementById('auth-error');
   errBox.classList.add('hidden');
-  if (!name || !email || !password) { errBox.textContent = "Заповни всі поля."; errBox.classList.remove('hidden'); return; }
+  if (!firstName || !lastName || !email || !password) { errBox.textContent = "Ім'я, прізвище, email і пароль — обов'язкові поля."; errBox.classList.remove('hidden'); return; }
   const btn = document.getElementById('btn-register');
   btn.disabled = true; btn.textContent = "Реєструю...";
   try {
     const usersSnap = await usersRef.limit(1).get();
     const isFirst = usersSnap.empty;
     const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const fullName = (firstName + ' ' + lastName).trim();
     await usersRef.doc(cred.user.uid).set({
-      name: name, email: email, role: isFirst ? 'manager' : 'employee', approved: isFirst, createdAt: Date.now()
+      name: fullName, firstName: firstName, lastName: lastName,
+      email: email, phone: phone, birthday: birthday, branchId: branchId,
+      role: isFirst ? 'manager' : 'employee', approved: isFirst, createdAt: Date.now()
     });
   } catch (e) {
     errBox.textContent = authErrorMsg(e);
@@ -679,6 +708,7 @@ function stopUnsubs() {
 // ======= APP BOOT =======
 function bootApp() {
   startBranchesGlobal();
+  checkUpcomingBirthdays();
   document.getElementById('sidebar-avatar').textContent = currentUserDoc.name.charAt(0).toUpperCase();
   document.getElementById('sidebar-name').textContent = currentUserDoc.name;
   document.getElementById('sidebar-role').textContent = currentUserDoc.role === 'manager' ? 'Керівник' : 'Працівник';
@@ -1051,6 +1081,7 @@ function startTeam() {
     users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     teamUsersCache = users;
     renderTeam(users);
+    renderBranchesList();
   }, err => {
     document.getElementById('pending-list').innerHTML = '<div class="empty-note">Не вдалося завантажити: ' + err.message + '</div>';
   });
@@ -1185,6 +1216,7 @@ function openEditUser(uid) {
   document.getElementById('edit-firstname').value = u.firstName || u.name || '';
   document.getElementById('edit-lastname').value = u.lastName || '';
   document.getElementById('edit-phone').value = u.phone || '';
+  document.getElementById('edit-workemail').value = u.workEmail || '';
   document.getElementById('edit-birthday').value = u.birthday || '';
   document.getElementById('edit-comment').value = u.comment || '';
   document.getElementById('edit-branch').innerHTML = branchOptionsHtml(u.branchId || '');
@@ -1202,6 +1234,7 @@ async function saveUserEdit() {
   const firstName = document.getElementById('edit-firstname').value.trim();
   const lastName = document.getElementById('edit-lastname').value.trim();
   const phone = document.getElementById('edit-phone').value.trim();
+  const workEmail = document.getElementById('edit-workemail').value.trim();
   const birthday = document.getElementById('edit-birthday').value;
   const comment = document.getElementById('edit-comment').value.trim();
   const branchId = document.getElementById('edit-branch').value || null;
@@ -1209,10 +1242,40 @@ async function saveUserEdit() {
   try {
     await usersRef.doc(editingUserId).update({
       firstName: firstName, lastName: lastName, name: fullName,
-      phone: phone, birthday: birthday, comment: comment, branchId: branchId
+      phone: phone, workEmail: workEmail, birthday: birthday, comment: comment, branchId: branchId
     });
     cancelEditUser();
+    checkUpcomingBirthdays();
   } catch (e) { alert("Не вдалося зберегти: " + e.message); }
+}
+
+// ======= BIRTHDAYS =======
+async function checkUpcomingBirthdays() {
+  try {
+    const snap = await usersRef.get();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const upcoming = [];
+    snap.docs.forEach(d => {
+      const u = d.data();
+      if (!u.birthday) return;
+      const parts = u.birthday.split('-');
+      if (parts.length !== 3) return;
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      let next = new Date(today.getFullYear(), month, day);
+      next.setHours(0, 0, 0, 0);
+      if (next < today) next = new Date(today.getFullYear() + 1, month, day);
+      const diffDays = Math.round((next - today) / 86400000);
+      if (diffDays >= 0 && diffDays <= 7) upcoming.push({ name: u.name || 'Без імені', days: diffDays });
+    });
+    upcoming.sort((a, b) => a.days - b.days);
+    const box = document.getElementById('birthday-alert');
+    if (!box) return;
+    if (upcoming.length === 0) { box.classList.add('hidden'); return; }
+    box.innerHTML = upcoming.map(u => '🎂 ' + escapeHtml(u.name) + (u.days === 0 ? ' — сьогодні!' : u.days === 1 ? ' — завтра' : ' — через ' + u.days + ' дн.')).join('<br>');
+    box.classList.remove('hidden');
+  } catch (e) { /* тихо ігноруємо, не критично */ }
 }
 
 async function approveUser(uid) { await usersRef.doc(uid).update({ approved: true, rejected: false }); }
