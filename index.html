@@ -8,7 +8,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
 
 <style>
   :root {
@@ -592,14 +591,10 @@ const branchesRef = db.collection('branches');
 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = secondaryApp.auth();
 
-// ======= EMAILJS =======
-const EMAILJS_SERVICE_ID = 'service_6i4k8gn';
-const EMAILJS_TEMPLATE_ID = 'template_wy235wb';
-const EMAILJS_PUBLIC_KEY = '8QatBjMzyPuPjTsgm';
-if (typeof emailjs !== 'undefined') emailjs.init(EMAILJS_PUBLIC_KEY);
+// ======= EMAIL (Google Apps Script Web App) =======
+const MAIL_SCRIPT_URL = 'https://script.google.com/a/macros/rozetka.ua/s/AKfycby8HC1RVSWqsPUZTYOT2yWTgi4QzuSCd6xkdN5FCPCbCi41lykCUl6i_nM4vP8jUKCX/exec';
 
 async function notifyEmails(recipientUids, subject, message) {
-  if (typeof emailjs === 'undefined') return;
   const seen = new Set();
   const list = recipientUids || [];
   for (const uid of list) {
@@ -610,10 +605,13 @@ async function notifyEmails(recipientUids, subject, message) {
     const email = u.workEmail || u.email;
     if (!email) continue;
     try {
-      await emailjs.send(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, {
-        to_email: email, to_name: u.name, subject: subject, message: message
+      await fetch(MAIL_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ to_email: email, to_name: u.name, subject: subject, message: message })
       });
-    } catch (e) { console.error('EmailJS error:', e); }
+    } catch (e) { console.error('Mail send error:', e); }
   }
 }
 
