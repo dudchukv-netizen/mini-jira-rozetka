@@ -592,7 +592,7 @@ const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
 const secondaryAuth = secondaryApp.auth();
 
 // ======= EMAIL (Google Apps Script Web App) =======
-const MAIL_SCRIPT_URL = 'https://script.google.com/a/macros/rozetka.ua/s/AKfycby8HC1RVSWqsPUZTYOT2yWTgi4QzuSCd6xkdN5FCPCbCi41lykCUl6i_nM4vP8jUKCX/exec';
+const MAIL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4MugdsZch6LkhjApjYOR58UgYAnDHF6w2CrVWZYoOuKPJ59LnqyouNKy1oHG-c2M-Wg/exec';
 
 async function notifyEmails(recipientUids, subject, message) {
   const seen = new Set();
