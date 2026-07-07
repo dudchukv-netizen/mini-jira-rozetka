@@ -608,16 +608,33 @@ function ticketLink(id) {
   return window.location.origin + window.location.pathname + '?ticket=' + id;
 }
 
+function showMailToast(message, isWarning) {
+  let toast = document.getElementById('mail-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'mail-toast';
+    toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;padding:11px 20px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;box-shadow:0 4px 16px rgba(0,0,0,0.25);transition:opacity .3s;max-width:92vw;text-align:center;';
+    document.body.appendChild(toast);
+  }
+  toast.style.background = isWarning ? '#B4482F' : '#5C7A52';
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  clearTimeout(window.__mailToastTimer);
+  window.__mailToastTimer = setTimeout(() => { toast.style.opacity = '0'; }, 5000);
+}
+
 async function notifyEmails(recipientUids, subject, message, link) {
   const seen = new Set();
   const list = recipientUids || [];
+  let sent = 0;
+  const skippedNoEmail = [];
   for (const uid of list) {
     if (!uid || (currentUser && uid === currentUser.uid) || seen.has(uid)) continue;
     seen.add(uid);
     const u = allUsersCache.find(x => x.id === uid);
     if (!u) continue;
     const email = u.workEmail || u.email;
-    if (!email) continue;
+    if (!email) { skippedNoEmail.push(u.name); continue; }
     try {
       await fetch(MAIL_SCRIPT_URL, {
         method: 'POST',
@@ -625,7 +642,13 @@ async function notifyEmails(recipientUids, subject, message, link) {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ to_email: email, to_name: u.name, subject: subject, message: message, link: link || '' })
       });
+      sent++;
     } catch (e) { console.error('Mail send error:', e); }
+  }
+  if (skippedNoEmail.length > 0) {
+    showMailToast('⚠️ Немає пошти в профілі: ' + skippedNoEmail.join(', ') + ' — лист не надіслано', true);
+  } else if (sent > 0) {
+    showMailToast('📧 Сповіщення надіслано (' + sent + ')', false);
   }
 }
 
