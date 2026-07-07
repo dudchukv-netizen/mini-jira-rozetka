@@ -437,6 +437,14 @@
       <div class="columns" id="assignment-columns"></div>
     </section>
 
+    <section id="view-archive" class="view">
+      <h1 class="page-title">Архів</h1>
+      <p class="page-sub">Виконані та відхилені заявки/задачі старші за 14 днів, або заархівовані вручну</p>
+      <div class="filter-row" id="archive-filter-row"></div>
+      <div id="archive-error" class="error-box hidden"></div>
+      <div id="archive-list"></div>
+    </section>
+
     <section id="view-team" class="view">
       <h1 class="page-title">Працівники</h1>
       <p class="page-sub">Підрозділи, створення профілів та підтвердження реєстрацій</p>
@@ -549,9 +557,11 @@
         <div class="ticket-sidebar">
           <select class="status-select-big" id="ticket-status-select"></select>
           <div id="status-note-box" class="hidden" style="margin-bottom:14px;">
+            <div id="quality-rating-row" class="hidden" style="display:flex;gap:4px;margin-bottom:8px;justify-content:center;font-size:22px;"></div>
             <textarea id="status-note-text" rows="2" placeholder="Коментар до зміни статусу (необов'язково)" style="font-size:12.5px;"></textarea>
             <button class="btn-primary" style="width:100%;margin-top:6px;padding:9px;font-size:13px;" onclick="applyStatusChange()">Зберегти статус</button>
           </div>
+          <div id="archive-box" style="margin-bottom:14px;"></div>
           <div class="sidebar-block">
             <div class="sidebar-label">Учасники заявки</div>
             <div id="ticket-participants"></div>
@@ -651,7 +661,13 @@ let currentFilter = "all";
 let allTasks = [];
 let allAssignments = [];
 let scopeMine = false;
-let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, unsubscribeUserDoc = null, unsubscribeTeam = null, unsubscribeAssignments = null;
+let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, unsubscribeUserDoc = null, unsubscribeTeam = null, unsubscribeAssignments = null, unsubscribeArchive = null;
+const ARCHIVE_DAYS = 14;
+function isOldEnoughToArchive(task) {
+  if (task.archived) return true;
+  if (task.status !== 'done' && task.status !== 'rejected') return false;
+  return (Date.now() - task.createdAt) > ARCHIVE_DAYS * 86400000;
+}
 let currentTicketId = null;
 let ticketReturnView = 'board';
 let currentView = 'dashboard';
@@ -851,6 +867,7 @@ function bootApp() {
         { view: 'create', ic: '➕', label: 'Створити заявку' },
         { view: 'board', ic: '📋', label: 'Всі заявки' },
         { view: 'assignments', ic: '📌', label: 'Задачі' },
+        { view: 'archive', ic: '🗄️', label: 'Архів' },
         { view: 'team', ic: '👥', label: 'Працівники' },
         { view: 'help', ic: '❓', label: 'Довідка' },
       ]
@@ -911,12 +928,14 @@ function switchView(view) {
   if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
   if (unsubscribeTeam) { unsubscribeTeam(); unsubscribeTeam = null; }
   if (unsubscribeAssignments) { unsubscribeAssignments(); unsubscribeAssignments = null; }
+  if (unsubscribeArchive) { unsubscribeArchive(); unsubscribeArchive = null; }
 
   if (view === 'dashboard') startDashboard();
   if (view === 'create') { renderTiles(); resetForm(); }
   if (view === 'board') { renderFilterChips(); startBoard(); }
   if (view === 'team') startTeam();
   if (view === 'assignments') startAssignments();
+  if (view === 'archive') startArchive();
 }
 
 function toggleMobileMenu() {
@@ -1109,6 +1128,23 @@ async function changeStatusTo(id, newStatusId) {
   } catch (e) { showError("Не вдалося оновити статус."); }
 }
 
+let selectedQualityRating = 0;
+
+function renderQualityStars(selected) {
+  const row = document.getElementById('quality-rating-row');
+  if (!row) return;
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    html += '<span onclick="setQualityRating(' + i + ')" style="cursor:pointer;color:' + (i <= selected ? '#C98A2E' : '#D8D9CC') + ';">★</span>';
+  }
+  row.innerHTML = html;
+}
+
+function setQualityRating(n) {
+  selectedQualityRating = n;
+  renderQualityStars(n);
+}
+
 async function applyStatusChange() {
   if (!currentTicketId) return;
   const sel = document.getElementById('ticket-status-select');
@@ -1121,11 +1157,14 @@ async function applyStatusChange() {
   const now = Date.now();
   const entries = [{ type: 'status', text: 'Статус змінено на: ' + newStatus.label, createdAt: now }];
   if (note) entries.push({ type: 'comment', author: currentUserDoc.name, text: note, createdAt: now + 1 });
+  const updateData = { status: newStatusId };
+  if (newStatusId === 'done' && selectedQualityRating > 0) {
+    updateData.qualityRating = selectedQualityRating;
+    entries.push({ type: 'status', text: 'Оцінка виконання: ' + '★'.repeat(selectedQualityRating) + '☆'.repeat(5 - selectedQualityRating), createdAt: now + 2 });
+  }
+  updateData.activity = firebase.firestore.FieldValue.arrayUnion(...entries);
   try {
-    await tasksRef.doc(currentTicketId).update({
-      status: newStatusId,
-      activity: firebase.firestore.FieldValue.arrayUnion(...entries)
-    });
+    await tasksRef.doc(currentTicketId).update(updateData);
     const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
     let message = (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '"';
     if (note) message += '\n\nКоментар: ' + note;
@@ -1241,8 +1280,9 @@ async function createAssignment() {
 function renderAssignmentsBoard() {
   const columns = document.getElementById('assignment-columns');
   columns.innerHTML = '';
+  const active = allAssignments.filter(t => !isOldEnoughToArchive(t));
   STATUSES.forEach(s => {
-    const colTasks = allAssignments.filter(t => t.status === s.id);
+    const colTasks = active.filter(t => t.status === s.id);
     const col = document.createElement('div');
     const title = document.createElement('div');
     title.className = 'col-title';
@@ -1259,8 +1299,55 @@ function renderAssignmentsBoard() {
   });
 }
 
+// ======= ARCHIVE =======
+let archiveFilter = 'all';
+function startArchive() {
+  archiveFilter = 'all';
+  renderArchiveFilterChips();
+  const errBox = document.getElementById('archive-error');
+  errBox.classList.add('hidden');
+  unsubscribeArchive = tasksRef.orderBy('createdAt', 'desc').onSnapshot(
+    snapshot => {
+      const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      window.__archivedTasks = all.filter(isOldEnoughToArchive);
+      renderArchiveList();
+    },
+    err => { errBox.textContent = "Не вдалося завантажити архів: " + err.message; errBox.classList.remove('hidden'); }
+  );
+}
+
+function renderArchiveFilterChips() {
+  const box = document.getElementById('archive-filter-row');
+  box.innerHTML = '';
+  const opts = [{ id: 'all', label: 'Усе' }, { id: 'request', label: 'Заявки' }, { id: 'assignment', label: 'Задачі' }];
+  opts.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'chip' + (archiveFilter === o.id ? ' active' : '');
+    btn.textContent = o.label;
+    btn.style.background = archiveFilter === o.id ? '#1B2430' : '';
+    btn.onclick = () => { archiveFilter = o.id; renderArchiveFilterChips(); renderArchiveList(); };
+    box.appendChild(btn);
+  });
+}
+
+function renderArchiveList() {
+  const list = document.getElementById('archive-list');
+  let items = window.__archivedTasks || [];
+  if (archiveFilter !== 'all') items = items.filter(t => (archiveFilter === 'assignment' ? t.kind === 'assignment' : (t.kind || 'request') !== 'assignment'));
+  list.innerHTML = '';
+  if (items.length === 0) { list.innerHTML = '<div class="empty-note">Архів порожній</div>'; return; }
+  items.forEach(t => list.appendChild(renderCard(t, 'archive')));
+}
+
+async function archiveTask(id) {
+  await tasksRef.doc(id).update({ archived: true });
+}
+async function unarchiveTask(id) {
+  await tasksRef.doc(id).update({ archived: false });
+}
+
 function renderBoard() {
-  const requestsOnly = allTasks.filter(t => (t.kind || 'request') !== 'assignment');
+  const requestsOnly = allTasks.filter(t => (t.kind || 'request') !== 'assignment' && !isOldEnoughToArchive(t));
   const visible = currentFilter === 'all' ? requestsOnly : requestsOnly.filter(t => t.category === currentFilter);
   const columns = document.getElementById('columns');
   columns.innerHTML = '';
@@ -1294,7 +1381,7 @@ function renderCard(task, fromView) {
   if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
   html += '</div>';
   html += '<p class="task-text">' + (task.subject ? '<b>' + escapeHtml(task.subject) + '</b><br><span style="font-weight:400;color:var(--muted);font-size:13px;">' + escapeHtml(task.text) + '</span>' : escapeHtml(task.text)) + '</p>';
-  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
+  html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>' + (task.qualityRating ? '<span style="color:#C98A2E;">' + '★'.repeat(task.qualityRating) + '</span> · ' : '') + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
   if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
     html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
@@ -1354,8 +1441,15 @@ function renderTicket(task) {
     sel.disabled = false;
     sel.innerHTML = statusOptionsHtml(task.status);
     sel.style.background = status.color;
-    sel.onchange = () => { noteBox.classList.remove('hidden'); };
+    sel.onchange = () => {
+      noteBox.classList.remove('hidden');
+      const showRating = sel.value === 'done';
+      document.getElementById('quality-rating-row').classList.toggle('hidden', !showRating);
+      if (showRating) { selectedQualityRating = task.qualityRating || 0; renderQualityStars(selectedQualityRating); }
+    };
     noteBox.classList.toggle('hidden', sel.value === task.status);
+    document.getElementById('quality-rating-row').classList.add('hidden');
+    selectedQualityRating = 0;
     document.getElementById('status-note-text').value = '';
     addParticipantBox.classList.remove('hidden');
     const psel = document.getElementById('participant-select');
@@ -1386,12 +1480,24 @@ function renderTicket(task) {
   });
   participantsBox.innerHTML = pHtml;
 
+  const archiveBox = document.getElementById('archive-box');
+  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+    if (task.archived) {
+      archiveBox.innerHTML = '<button class="btn-ghost" style="width:100%;" onclick="unarchiveTask(\'' + task.id + '\')">↩ Розархівувати</button>';
+    } else {
+      archiveBox.innerHTML = '<button class="btn-ghost" style="width:100%;" onclick="archiveTask(\'' + task.id + '\')">🗄️ Архівувати</button>';
+    }
+  } else {
+    archiveBox.innerHTML = '';
+  }
+
   document.getElementById('ticket-details').innerHTML =
     '<div class="detail-row"><div class="detail-label">Категорія</div><div class="detail-value">' + cat.icon + ' ' + escapeHtml(cat.label) + '</div></div>' +
     (task.branchName ? '<div class="detail-row"><div class="detail-label">Підрозділ</div><div class="detail-value">🏬 ' + escapeHtml(task.branchName) + '</div></div>' : '') +
     '<div class="detail-row"><div class="detail-label">Терміновість</div><div class="detail-value">' + (task.priority === 'urgent' ? '⚠ Термінове' : 'Звичайне') + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Створено</div><div class="detail-value">' + fullDate(task.createdAt) + '</div></div>' +
-    '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>';
+    '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>' +
+    (task.qualityRating ? '<div class="detail-row"><div class="detail-label">Оцінка виконання</div><div class="detail-value" style="color:#C98A2E;">' + '★'.repeat(task.qualityRating) + '☆'.repeat(5 - task.qualityRating) + '</div></div>' : '');
 
   const sorted = activity.slice().sort((a, b) => b.createdAt - a.createdAt);
   const feed = document.getElementById('ticket-activity');
