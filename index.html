@@ -594,7 +594,11 @@ const secondaryAuth = secondaryApp.auth();
 // ======= EMAIL (Google Apps Script Web App) =======
 const MAIL_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw4MugdsZch6LkhjApjYOR58UgYAnDHF6w2CrVWZYoOuKPJ59LnqyouNKy1oHG-c2M-Wg/exec';
 
-async function notifyEmails(recipientUids, subject, message) {
+function ticketLink(id) {
+  return window.location.origin + window.location.pathname + '?ticket=' + id;
+}
+
+async function notifyEmails(recipientUids, subject, message, link) {
   const seen = new Set();
   const list = recipientUids || [];
   for (const uid of list) {
@@ -609,7 +613,7 @@ async function notifyEmails(recipientUids, subject, message) {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ to_email: email, to_name: u.name, subject: subject, message: message })
+        body: JSON.stringify({ to_email: email, to_name: u.name, subject: subject, message: message, link: link || '' })
       });
     } catch (e) { console.error('Mail send error:', e); }
   }
@@ -871,6 +875,17 @@ function bootApp() {
   switchView(isPrivileged(currentUserDoc.role) ? 'dashboard' : 'create');
 
   if (currentUserDoc.role === 'manager') watchPendingBadge();
+
+  checkDeepLinkTicket();
+}
+
+function checkDeepLinkTicket() {
+  const params = new URLSearchParams(window.location.search);
+  const ticketId = params.get('ticket');
+  if (ticketId) {
+    history.replaceState(null, '', window.location.pathname);
+    setTimeout(() => openTicket(ticketId, isPrivileged(currentUserDoc.role) ? 'board' : 'board'), 300);
+  }
 }
 
 function watchPendingBadge() {
@@ -979,7 +994,7 @@ async function submitTask() {
   if (!subject || !text || !selectedCategory) { errBox.textContent = "Обери категорію, впиши тему і опиши запит."; errBox.classList.remove('hidden'); return; }
   btn.disabled = true; btn.textContent = "Надсилаю...";
   try {
-    await tasksRef.add({
+    const docRef = await tasksRef.add({
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
       participantUids: [currentUser.uid],
@@ -995,7 +1010,8 @@ async function submitTask() {
     });
     const privilegedUids = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
     notifyEmails(privilegedUids, subject,
-      currentUserDoc.name + ' створив(ла) нову заявку "' + subject + '" (' + catInfo(selectedCategory).label + '):\n\n' + text);
+      currentUserDoc.name + ' створив(ла) нову заявку "' + subject + '" (' + catInfo(selectedCategory).label + '):\n\n' + text,
+      ticketLink(docRef.id));
     document.getElementById('emp-success').classList.remove('hidden');
     setTimeout(() => { resetForm(); }, 1800);
   } catch (e) {
@@ -1088,7 +1104,8 @@ async function changeStatusTo(id, newStatusId) {
     await tasksRef.doc(id).update({ status: newStatusId, activity: firebase.firestore.FieldValue.arrayUnion(entry) });
     const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
     notifyEmails(recipients, task.subject || 'Зміна статусу заявки',
-      (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '":\n\n' + task.text);
+      (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '":\n\n' + task.text,
+      ticketLink(id));
   } catch (e) { showError("Не вдалося оновити статус."); }
 }
 
@@ -1113,7 +1130,7 @@ async function applyStatusChange() {
     let message = (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '"';
     if (note) message += '\n\nКоментар: ' + note;
     message += '\n\nЗаявка: ' + task.text;
-    notifyEmails(recipients, task.subject || 'Оновлення заявки', message);
+    notifyEmails(recipients, task.subject || 'Оновлення заявки', message, ticketLink(currentTicketId));
     noteInput.value = '';
     document.getElementById('status-note-box').classList.add('hidden');
   } catch (e) { showError("Не вдалося оновити статус."); }
@@ -1190,7 +1207,7 @@ async function createAssignment() {
 
   btn.disabled = true; btn.textContent = "Надсилаю...";
   try {
-    await tasksRef.add({
+    const docRef = await tasksRef.add({
       kind: 'assignment',
       subject: subject,
       text: text,
@@ -1205,7 +1222,8 @@ async function createAssignment() {
       activity: [{ type: 'status', text: 'Задачу створено', createdAt: Date.now() }]
     });
     notifyEmails(assigneeUids, subject,
-      currentUserDoc.name + ' доручив(ла) вам нову задачу "' + subject + '":\n\n' + (text || '(без опису)'));
+      currentUserDoc.name + ' доручив(ла) вам нову задачу "' + subject + '":\n\n' + (text || '(без опису)'),
+      ticketLink(docRef.id));
     okBox.textContent = "Задачу надіслано " + assigneeUids.length + " виконавцю(ям).";
     okBox.classList.remove('hidden');
     document.getElementById('asg-subject').value = '';
@@ -1477,7 +1495,8 @@ async function submitTicketComment() {
     if (task) {
       const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
       notifyEmails(recipients, task.subject || 'Новий коментар до заявки',
-        currentUserDoc.name + ' написав(ла) коментар' + (pendingCommentImage ? ' (+фото)' : '') + ':\n\n' + (text || '(без тексту)') + '\n\nЗаявка: ' + task.text);
+        currentUserDoc.name + ' написав(ла) коментар' + (pendingCommentImage ? ' (+фото)' : '') + ':\n\n' + (text || '(без тексту)') + '\n\nЗаявка: ' + task.text,
+        ticketLink(currentTicketId));
     }
     textInput.value = '';
     clearPendingImage();
