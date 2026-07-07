@@ -389,6 +389,8 @@
       <div id="form-area" class="form-panel hidden">
         <button class="btn-ghost" id="btn-change-cat" style="margin-bottom:16px;">← Обрати іншу категорію</button>
         <div class="selected-cat-banner" id="selected-cat-banner"></div>
+        <label class="field-label">Тема</label>
+        <input type="text" id="inp-subject" placeholder="Наприклад: Заміна картриджів">
         <label class="field-label">Опис</label>
         <textarea id="inp-text" rows="4" placeholder="Коротко, у чому суть запиту"></textarea>
         <label class="urgent-row"><input type="checkbox" id="inp-urgent"> Це термінове</label>
@@ -404,6 +406,36 @@
       <div class="filter-row" id="filter-row"></div>
       <div id="mgr-error" class="error-box hidden"></div>
       <div class="columns" id="columns"></div>
+    </section>
+
+    <section id="view-assignments" class="view">
+      <h1 class="page-title" id="assignments-title">Задачі</h1>
+      <p class="page-sub" id="assignments-sub">Постав задачу одному або декільком працівникам</p>
+
+      <div class="section-block" id="assignment-create-block">
+        <h3>Нова задача</h3>
+        <label class="field-label" style="margin-top:0;">Тема</label>
+        <input type="text" id="asg-subject" placeholder="Наприклад: Підготувати презентацію">
+        <label class="field-label">Опис</label>
+        <textarea id="asg-text" rows="3" placeholder="Деталі задачі"></textarea>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px;">
+          <div>
+            <label class="field-label" style="margin-top:0;">Підрозділ</label>
+            <select id="asg-branch" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+              <option value="">Без підрозділу</option>
+            </select>
+          </div>
+        </div>
+        <label class="urgent-row"><input type="checkbox" id="asg-urgent"> Це термінове</label>
+        <label class="field-label">Виконавці (можна декілька)</label>
+        <div id="asg-employee-list" style="max-height:220px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
+        <div id="asg-error" class="error-box hidden"></div>
+        <div class="btn-submit-row"><button class="btn-primary" onclick="createAssignment()" id="btn-create-asg">Поставити задачу</button></div>
+        <div id="asg-success" class="success-box hidden">Задачу надіслано ✓</div>
+      </div>
+
+      <div id="mgr-asg-error" class="error-box hidden"></div>
+      <div class="columns" id="assignment-columns"></div>
     </section>
 
     <section id="view-team" class="view">
@@ -516,7 +548,11 @@
           <div id="ticket-activity"></div>
         </div>
         <div class="ticket-sidebar">
-          <select class="status-select-big" id="ticket-status-select" onchange="changeStatusTo(currentTicketId, this.value)"></select>
+          <select class="status-select-big" id="ticket-status-select"></select>
+          <div id="status-note-box" class="hidden" style="margin-bottom:14px;">
+            <textarea id="status-note-text" rows="2" placeholder="Коментар до зміни статусу (необов'язково)" style="font-size:12.5px;"></textarea>
+            <button class="btn-primary" style="width:100%;margin-top:6px;padding:9px;font-size:13px;" onclick="applyStatusChange()">Зберегти статус</button>
+          </div>
           <div class="sidebar-block">
             <div class="sidebar-label">Учасники заявки</div>
             <div id="ticket-participants"></div>
@@ -611,8 +647,9 @@ let currentUserDoc = null;
 let selectedCategory = null;
 let currentFilter = "all";
 let allTasks = [];
+let allAssignments = [];
 let scopeMine = false;
-let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, unsubscribeUserDoc = null, unsubscribeTeam = null;
+let unsubscribeBoard = null, unsubscribeDash = null, unsubscribeTicket = null, unsubscribeUserDoc = null, unsubscribeTeam = null, unsubscribeAssignments = null;
 let currentTicketId = null;
 let ticketReturnView = 'board';
 let currentView = 'dashboard';
@@ -811,12 +848,14 @@ function bootApp() {
         { view: 'dashboard', ic: '🏠', label: 'Дашборд' },
         { view: 'create', ic: '➕', label: 'Створити заявку' },
         { view: 'board', ic: '📋', label: 'Всі заявки' },
+        { view: 'assignments', ic: '📌', label: 'Задачі' },
         { view: 'team', ic: '👥', label: 'Працівники' },
         { view: 'help', ic: '❓', label: 'Довідка' },
       ]
     : [
         { view: 'create', ic: '➕', label: 'Створити заявку' },
         { view: 'board', ic: '📋', label: 'Мої заявки' },
+        { view: 'assignments', ic: '📌', label: 'Мої задачі' },
         { view: 'help', ic: '❓', label: 'Довідка' },
       ];
   items.forEach(it => {
@@ -858,11 +897,13 @@ function switchView(view) {
   if (unsubscribeDash) { unsubscribeDash(); unsubscribeDash = null; }
   if (unsubscribeTicket) { unsubscribeTicket(); unsubscribeTicket = null; }
   if (unsubscribeTeam) { unsubscribeTeam(); unsubscribeTeam = null; }
+  if (unsubscribeAssignments) { unsubscribeAssignments(); unsubscribeAssignments = null; }
 
   if (view === 'dashboard') startDashboard();
   if (view === 'create') { renderTiles(); resetForm(); }
   if (view === 'board') { renderFilterChips(); startBoard(); }
   if (view === 'team') startTeam();
+  if (view === 'assignments') startAssignments();
 }
 
 function toggleMobileMenu() {
@@ -922,6 +963,7 @@ document.getElementById('btn-change-cat').onclick = () => {
 function resetForm() {
   document.getElementById('tile-area').classList.remove('hidden');
   document.getElementById('form-area').classList.add('hidden');
+  document.getElementById('inp-subject').value = '';
   document.getElementById('inp-text').value = '';
   document.getElementById('inp-urgent').checked = false;
   document.getElementById('emp-error').classList.add('hidden');
@@ -930,12 +972,13 @@ function resetForm() {
 }
 
 async function submitTask() {
+  const subject = document.getElementById('inp-subject').value.trim();
   const text = document.getElementById('inp-text').value.trim();
   const urgent = document.getElementById('inp-urgent').checked;
   const errBox = document.getElementById('emp-error');
   const btn = document.getElementById('btn-submit');
   errBox.classList.add('hidden');
-  if (!text || !selectedCategory) { errBox.textContent = "Обери категорію і опиши запит."; errBox.classList.remove('hidden'); return; }
+  if (!subject || !text || !selectedCategory) { errBox.textContent = "Обери категорію, впиши тему і опиши запит."; errBox.classList.remove('hidden'); return; }
   btn.disabled = true; btn.textContent = "Надсилаю...";
   try {
     await tasksRef.add({
@@ -945,6 +988,7 @@ async function submitTask() {
       branchId: currentUserDoc.branchId || null,
       branchName: currentUserDoc.branchId ? branchName(currentUserDoc.branchId) : null,
       category: selectedCategory,
+      subject: subject,
       priority: urgent ? "urgent" : "normal",
       text: text,
       status: "new",
@@ -952,8 +996,8 @@ async function submitTask() {
       activity: [{ type: 'status', text: 'Заявку створено', createdAt: Date.now() }]
     });
     const privilegedUids = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
-    notifyEmails(privilegedUids, 'Нова заявка: ' + catInfo(selectedCategory).label,
-      currentUserDoc.name + ' створив(ла) нову заявку "' + catInfo(selectedCategory).label + '":\n\n' + text);
+    notifyEmails(privilegedUids, subject,
+      currentUserDoc.name + ' створив(ла) нову заявку "' + subject + '" (' + catInfo(selectedCategory).label + '):\n\n' + text);
     document.getElementById('emp-success').classList.remove('hidden');
     setTimeout(() => { resetForm(); }, 1800);
   } catch (e) {
@@ -969,7 +1013,7 @@ function startDashboard() {
   unsubscribeDash = tasksRef.orderBy('createdAt', 'desc').onSnapshot(snapshot => {
     const tasks = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     allTasks = tasks;
-    renderDashboard(tasks);
+    renderDashboard(tasks.filter(t => (t.kind || 'request') !== 'assignment'));
   });
 }
 
@@ -1038,15 +1082,42 @@ function statusOptionsHtml(currentStatus) {
 }
 
 async function changeStatusTo(id, newStatusId) {
-  const task = allTasks.find(t => t.id === id) || window.__currentTicket;
+  const task = allTasks.find(t => t.id === id) || allAssignments.find(t => t.id === id) || window.__currentTicket;
   if (!task) return;
   const newStatus = statusInfo(newStatusId);
   const entry = { type: 'status', text: 'Статус змінено на: ' + newStatus.label, createdAt: Date.now() };
   try {
     await tasksRef.doc(id).update({ status: newStatusId, activity: firebase.firestore.FieldValue.arrayUnion(entry) });
     const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
-    notifyEmails(recipients, 'Зміна статусу заявки',
+    notifyEmails(recipients, task.subject || 'Зміна статусу заявки',
       (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '":\n\n' + task.text);
+  } catch (e) { showError("Не вдалося оновити статус."); }
+}
+
+async function applyStatusChange() {
+  if (!currentTicketId) return;
+  const sel = document.getElementById('ticket-status-select');
+  const noteInput = document.getElementById('status-note-text');
+  const newStatusId = sel.value;
+  const note = noteInput.value.trim();
+  const task = window.__currentTicket;
+  if (!task) return;
+  const newStatus = statusInfo(newStatusId);
+  const now = Date.now();
+  const entries = [{ type: 'status', text: 'Статус змінено на: ' + newStatus.label, createdAt: now }];
+  if (note) entries.push({ type: 'comment', author: currentUserDoc.name, text: note, createdAt: now + 1 });
+  try {
+    await tasksRef.doc(currentTicketId).update({
+      status: newStatusId,
+      activity: firebase.firestore.FieldValue.arrayUnion(...entries)
+    });
+    const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
+    let message = (currentUserDoc ? currentUserDoc.name : 'Керівник') + ' змінив(ла) статус заявки на "' + newStatus.label + '"';
+    if (note) message += '\n\nКоментар: ' + note;
+    message += '\n\nЗаявка: ' + task.text;
+    notifyEmails(recipients, task.subject || 'Оновлення заявки', message);
+    noteInput.value = '';
+    document.getElementById('status-note-box').classList.add('hidden');
   } catch (e) { showError("Не вдалося оновити статус."); }
 }
 
@@ -1060,8 +1131,121 @@ function showError(msg) {
   if (el) { el.textContent = msg; el.classList.remove('hidden'); }
 }
 
+// ======= ASSIGNMENTS (задачі від керівника) =======
+function startAssignments() {
+  document.getElementById('assignments-title').textContent = scopeMine ? 'Мої задачі' : 'Задачі';
+  document.getElementById('assignments-sub').textContent = scopeMine ? 'Задачі, які тобі доручив керівник' : 'Постав задачу одному або декільком працівникам';
+  document.getElementById('assignment-create-block').classList.toggle('hidden', scopeMine);
+
+  if (!scopeMine) {
+    renderAssignmentBranchSelect();
+    renderAssignmentEmployeeList();
+  }
+
+  const errBox = document.getElementById('mgr-asg-error');
+  errBox.classList.add('hidden');
+  let q = tasksRef.orderBy('createdAt', 'desc');
+  if (scopeMine) q = tasksRef.where('participantUids', 'array-contains', currentUser.uid);
+  unsubscribeAssignments = q.onSnapshot(
+    snapshot => {
+      const all = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      allAssignments = all.filter(t => t.kind === 'assignment').sort((a, b) => b.createdAt - a.createdAt);
+      renderAssignmentsBoard();
+    },
+    err => { errBox.textContent = "Не вдалося завантажити задачі: " + err.message; errBox.classList.remove('hidden'); }
+  );
+}
+
+function renderAssignmentBranchSelect() {
+  const sel = document.getElementById('asg-branch');
+  if (sel) sel.innerHTML = branchOptionsHtml('');
+}
+
+function renderAssignmentEmployeeList() {
+  const box = document.getElementById('asg-employee-list');
+  const people = allUsersCache.filter(u => u.approved);
+  if (people.length === 0) { box.innerHTML = '<div class="empty-note">Немає підтверджених працівників</div>'; return; }
+  box.innerHTML = people.map(u =>
+    '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:pointer;">' +
+    '<input type="checkbox" class="asg-emp-check" value="' + u.id + '"> ' + escapeHtml(u.name) +
+    (u.role === 'manager' ? ' <span class="role-tag">Керівник</span>' : u.role === 'admin' ? ' <span class="role-tag">Адмін</span>' : '') +
+    '</label>'
+  ).join('');
+}
+
+async function createAssignment() {
+  const subject = document.getElementById('asg-subject').value.trim();
+  const text = document.getElementById('asg-text').value.trim();
+  const branchId = document.getElementById('asg-branch').value || null;
+  const urgent = document.getElementById('asg-urgent').checked;
+  const assigneeUids = Array.from(document.querySelectorAll('.asg-emp-check:checked')).map(el => el.value);
+  const errBox = document.getElementById('asg-error');
+  const okBox = document.getElementById('asg-success');
+  const btn = document.getElementById('btn-create-asg');
+  errBox.classList.add('hidden'); okBox.classList.add('hidden');
+
+  if (!subject || assigneeUids.length === 0) {
+    errBox.textContent = "Впиши тему і обери хоча б одного виконавця.";
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = "Надсилаю...";
+  try {
+    await tasksRef.add({
+      kind: 'assignment',
+      subject: subject,
+      text: text,
+      author: currentUserDoc.name,
+      authorUid: currentUser.uid,
+      participantUids: [currentUser.uid, ...assigneeUids],
+      branchId: branchId,
+      branchName: branchId ? branchName(branchId) : null,
+      priority: urgent ? "urgent" : "normal",
+      status: "new",
+      createdAt: Date.now(),
+      activity: [{ type: 'status', text: 'Задачу створено', createdAt: Date.now() }]
+    });
+    notifyEmails(assigneeUids, subject,
+      currentUserDoc.name + ' доручив(ла) вам нову задачу "' + subject + '":\n\n' + (text || '(без опису)'));
+    okBox.textContent = "Задачу надіслано " + assigneeUids.length + " виконавцю(ям).";
+    okBox.classList.remove('hidden');
+    document.getElementById('asg-subject').value = '';
+    document.getElementById('asg-text').value = '';
+    document.getElementById('asg-urgent').checked = false;
+    document.querySelectorAll('.asg-emp-check').forEach(el => el.checked = false);
+  } catch (e) {
+    errBox.textContent = "Не вдалося надіслати задачу: " + e.message;
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = "Поставити задачу";
+  }
+}
+
+function renderAssignmentsBoard() {
+  const columns = document.getElementById('assignment-columns');
+  columns.innerHTML = '';
+  STATUSES.forEach(s => {
+    const colTasks = allAssignments.filter(t => t.status === s.id);
+    const col = document.createElement('div');
+    const title = document.createElement('div');
+    title.className = 'col-title';
+    title.textContent = s.label + ' (' + colTasks.length + ')';
+    col.appendChild(title);
+    if (colTasks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'empty-note';
+      empty.textContent = 'Порожньо';
+      col.appendChild(empty);
+    }
+    colTasks.forEach(t => col.appendChild(renderCard(t, 'assignments')));
+    columns.appendChild(col);
+  });
+}
+
 function renderBoard() {
-  const visible = currentFilter === 'all' ? allTasks : allTasks.filter(t => t.category === currentFilter);
+  const requestsOnly = allTasks.filter(t => (t.kind || 'request') !== 'assignment');
+  const visible = currentFilter === 'all' ? requestsOnly : requestsOnly.filter(t => t.category === currentFilter);
   const columns = document.getElementById('columns');
   columns.innerHTML = '';
   STATUSES.forEach(s => {
@@ -1083,7 +1267,8 @@ function renderBoard() {
 }
 
 function renderCard(task, fromView) {
-  const cat = catInfo(task.category);
+  const isAssignment = task.kind === 'assignment';
+  const cat = isAssignment ? { icon: '📌', label: 'Задача від керівника', color: '#3B6EA8' } : catInfo(task.category);
   const activity = task.activity || [];
   const commentCount = activity.filter(a => a.type === 'comment').length;
 
@@ -1092,7 +1277,7 @@ function renderCard(task, fromView) {
   html += '<span class="cat-badge" style="background:' + cat.color + ';">' + cat.icon + ' ' + escapeHtml(cat.label) + '</span>';
   if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
   html += '</div>';
-  html += '<p class="task-text">' + escapeHtml(task.text) + '</p>';
+  html += '<p class="task-text">' + (task.subject ? '<b>' + escapeHtml(task.subject) + '</b><br><span style="font-weight:400;color:var(--muted);font-size:13px;">' + escapeHtml(task.text) + '</span>' : escapeHtml(task.text)) + '</p>';
   html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>🕐 ' + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
   if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
@@ -1135,22 +1320,27 @@ function closeTicket() {
 }
 
 function renderTicket(task) {
-  const cat = catInfo(task.category);
+  const isAssignment = task.kind === 'assignment';
+  const cat = isAssignment ? { icon: '📌', label: 'Задача від керівника' } : catInfo(task.category);
   const status = statusInfo(task.status);
   const activity = task.activity || [];
 
-  document.getElementById('ticket-breadcrumb').innerHTML = '<a onclick="closeTicket()">' + (scopeMine ? 'Мої заявки' : 'Всі заявки') + '</a> &nbsp;›&nbsp; ' + cat.icon + ' ' + escapeHtml(cat.label);
-  document.getElementById('ticket-title').textContent = task.text.length > 70 ? task.text.slice(0, 70) + '…' : task.text;
+  document.getElementById('ticket-breadcrumb').innerHTML = '<a onclick="closeTicket()">' + (isAssignment ? (scopeMine ? 'Мої задачі' : 'Задачі') : (scopeMine ? 'Мої заявки' : 'Всі заявки')) + '</a> &nbsp;›&nbsp; ' + cat.icon + ' ' + escapeHtml(cat.label);
+  document.getElementById('ticket-title').textContent = task.subject || (task.text.length > 70 ? task.text.slice(0, 70) + '…' : task.text);
   document.getElementById('ticket-id').textContent = shortId(task.id);
   document.getElementById('ticket-desc-text').textContent = task.text;
 
   const sel = document.getElementById('ticket-status-select');
+  const noteBox = document.getElementById('status-note-box');
   const addParticipantBox = document.getElementById('ticket-add-participant');
   if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
     sel.classList.remove('hidden');
     sel.disabled = false;
     sel.innerHTML = statusOptionsHtml(task.status);
     sel.style.background = status.color;
+    sel.onchange = () => { noteBox.classList.remove('hidden'); };
+    noteBox.classList.toggle('hidden', sel.value === task.status);
+    document.getElementById('status-note-text').value = '';
     addParticipantBox.classList.remove('hidden');
     const psel = document.getElementById('participant-select');
     const already = task.participantUids || [task.authorUid];
@@ -1163,6 +1353,7 @@ function renderTicket(task) {
     sel.innerHTML = '<option>' + escapeHtml(status.label) + '</option>';
     sel.style.background = status.color;
     sel.style.opacity = '0.85';
+    noteBox.classList.add('hidden');
     addParticipantBox.classList.add('hidden');
   }
 
@@ -1287,7 +1478,7 @@ async function submitTicketComment() {
     const task = window.__currentTicket;
     if (task) {
       const recipients = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
-      notifyEmails(recipients, 'Новий коментар до заявки',
+      notifyEmails(recipients, task.subject || 'Новий коментар до заявки',
         currentUserDoc.name + ' написав(ла) коментар' + (pendingCommentImage ? ' (+фото)' : '') + ':\n\n' + (text || '(без тексту)') + '\n\nЗаявка: ' + task.text);
     }
     textInput.value = '';
