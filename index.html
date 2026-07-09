@@ -897,6 +897,11 @@ function stopUnsubs() {
 
 // ======= APP BOOT =======
 function isPrivileged(role) { return role === 'manager' || role === 'admin'; }
+function canChangeStatus(task) {
+  if (!currentUserDoc) return false;
+  if (isPrivileged(currentUserDoc.role)) return true;
+  return !!(task.responsibleUid && currentUser && task.responsibleUid === currentUser.uid);
+}
 
 function bootApp() {
   startBranchesGlobal();
@@ -1136,6 +1141,7 @@ async function submitTask() {
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
       participantUids: initialParticipants,
+      responsibleUid: responsibleUid,
       branchId: currentUserDoc.branchId || null,
       branchName: currentUserDoc.branchId ? branchName(currentUserDoc.branchId) : null,
       category: selectedCategory,
@@ -1508,9 +1514,11 @@ function renderCard(task, fromView) {
   html += '<p class="task-text">' + (task.subject ? '<b>' + escapeHtml(task.subject) + '</b><br><span style="font-weight:400;color:var(--muted);font-size:13px;">' + escapeHtml(task.text) + '</span>' : escapeHtml(task.text)) + '</p>';
   html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>' + (task.qualityRating ? '<span style="color:#C98A2E;">' + '★'.repeat(task.qualityRating) + '</span> · ' : '') + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
-  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+  if (canChangeStatus(task)) {
     html += '<select class="status-select" onclick="event.stopPropagation()" onchange="event.stopPropagation(); changeStatusTo(&quot;' + task.id + '&quot;, this.value)">' + statusOptionsHtml(task.status) + '</select>';
-    html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
+    if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+      html += '<button class="btn-delete" title="Видалити" onclick="deleteTask(&quot;' + task.id + '&quot;, event)">✕</button>';
+    }
   } else {
     const st = statusInfo(task.status);
     html += '<span class="cat-badge" style="background:' + st.color + ';flex:1;text-align:center;padding:8px;">' + st.label + '</span>';
@@ -1561,7 +1569,7 @@ function renderTicket(task) {
   const sel = document.getElementById('ticket-status-select');
   const noteBox = document.getElementById('status-note-box');
   const addParticipantBox = document.getElementById('ticket-add-participant');
-  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+  if (canChangeStatus(task)) {
     sel.classList.remove('hidden');
     sel.disabled = false;
     sel.innerHTML = statusOptionsHtml(task.status);
@@ -1576,12 +1584,6 @@ function renderTicket(task) {
     document.getElementById('quality-rating-row').classList.add('hidden');
     selectedQualityRating = 0;
     document.getElementById('status-note-text').value = '';
-    addParticipantBox.classList.remove('hidden');
-    const psel = document.getElementById('participant-select');
-    const already = task.participantUids || [task.authorUid];
-    const candidates = allUsersCache.filter(u => u.approved && !already.includes(u.id));
-    psel.innerHTML = candidates.length === 0 ? '<option value="">Немає кого додати</option>' :
-      candidates.map(u => '<option value="' + u.id + '">' + escapeHtml(u.name) + '</option>').join('');
   } else {
     sel.classList.remove('hidden');
     sel.disabled = true;
@@ -1589,6 +1591,16 @@ function renderTicket(task) {
     sel.style.background = status.color;
     sel.style.opacity = '0.85';
     noteBox.classList.add('hidden');
+  }
+
+  if (currentUserDoc && isPrivileged(currentUserDoc.role)) {
+    addParticipantBox.classList.remove('hidden');
+    const psel = document.getElementById('participant-select');
+    const already = task.participantUids || [task.authorUid];
+    const candidates = allUsersCache.filter(u => u.approved && !already.includes(u.id));
+    psel.innerHTML = candidates.length === 0 ? '<option value="">Немає кого додати</option>' :
+      candidates.map(u => '<option value="' + u.id + '">' + escapeHtml(u.name) + '</option>').join('');
+  } else {
     addParticipantBox.classList.add('hidden');
   }
 
