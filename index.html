@@ -390,7 +390,20 @@
         <div class="selected-cat-banner" id="selected-cat-banner"></div>
         <label class="field-label">Тема</label>
         <input type="text" id="inp-subject" placeholder="Наприклад: Заміна картриджів">
-        <label class="field-label">Опис</label>
+
+        <div id="video-fields-box" class="hidden">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+            <div><label class="field-label" style="margin-top:0;">Дата події</label><input type="date" id="vid-date"></div>
+            <div><label class="field-label" style="margin-top:0;">Час від</label><input type="time" id="vid-time-from"></div>
+            <div><label class="field-label" style="margin-top:0;">Час до (якщо відомо)</label><input type="time" id="vid-time-to"></div>
+          </div>
+          <label class="field-label">Номер камери / каси</label>
+          <input type="text" id="vid-camera" placeholder="Наприклад: Каса 2, камера при вході">
+          <label class="field-label">Причина запиту</label>
+          <textarea id="vid-reason" rows="3" placeholder="Що саме сталось і чому потрібен цей запис"></textarea>
+        </div>
+
+        <label class="field-label" id="inp-text-label">Опис</label>
         <textarea id="inp-text" rows="4" placeholder="Коротко, у чому суть запиту"></textarea>
         <label class="urgent-row"><input type="checkbox" id="inp-urgent"> Це термінове</label>
         <div id="emp-error" class="error-box hidden"></div>
@@ -666,6 +679,7 @@ const CATEGORIES = [
   { id: "it", label: "ІТ-підтримка", group: "tech", color: "#3B6EA8", icon: "💻", hint: "Опишіть проблему з комп'ютером, інтернетом чи програмами (1С, планшет, термінал тощо)." },
   { id: "tv_issue", label: "Проблема на точці", group: "tech", color: "#8A5CA8", icon: "📺", hint: "Напишіть, які поломки чи проблеми у вас на магазині (вітрина, вивіска, освітлення тощо)." },
   { id: "pos_materials", label: "Забезпечення точки", group: "tech", color: "#C98A2E", icon: "🏷️", hint: "Вкажіть, які матеріали потрібні: воблери, цінники, акційні POS-матеріали." },
+  { id: "video_request", label: "Запит на відеозапис", group: "tech", color: "#6B5CB4", icon: "🎥", hint: "Заповни поля нижче: дата, час, номер камери/каси та причина запиту.", isStructured: true },
   { id: "transfer", label: "Переведення", group: "hr", color: "#5C7A52", icon: "🔄", hint: "Вкажіть, в який магазин чи відділ хочете перевестись і коротко чому." },
   { id: "schedule", label: "Зміна графіка", group: "hr", color: "#3B8C82", icon: "🗓️", hint: "Опишіть, які зміни потрібні в графіку і на який період." },
   { id: "training_need", label: "Додаткове навчання", group: "hr", color: "#B45C3B", icon: "📚", hint: "Опишіть, що саме не виходить чи чого хочете навчитись." },
@@ -1046,7 +1060,11 @@ function selectCategory(id) {
   banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div><div class="selected-cat-title" style="color:' + c.color + ';">' + c.label + '</div><div class="selected-cat-hint">' + c.hint + '</div>' +
     (responsiblePerson ? '<div class="selected-cat-hint" style="margin-top:4px;font-weight:700;">📨 Обробляє: ' + escapeHtml(responsiblePerson.name) + '</div>' : '') +
     '</div>';
-  document.getElementById('inp-text').placeholder = c.hint;
+
+  const isVideo = c.isStructured === true;
+  document.getElementById('video-fields-box').classList.toggle('hidden', !isVideo);
+  document.getElementById('inp-text-label').textContent = isVideo ? 'Додаткові деталі (необов\'язково)' : 'Опис';
+  document.getElementById('inp-text').placeholder = isVideo ? 'Будь-що додаткове, якщо потрібно' : c.hint;
 }
 
 document.getElementById('btn-change-cat').onclick = () => {
@@ -1061,6 +1079,12 @@ function resetForm() {
   document.getElementById('inp-subject').value = '';
   document.getElementById('inp-text').value = '';
   document.getElementById('inp-urgent').checked = false;
+  document.getElementById('vid-date').value = '';
+  document.getElementById('vid-time-from').value = '';
+  document.getElementById('vid-time-to').value = '';
+  document.getElementById('vid-camera').value = '';
+  document.getElementById('vid-reason').value = '';
+  document.getElementById('video-fields-box').classList.add('hidden');
   document.getElementById('emp-error').classList.add('hidden');
   document.getElementById('emp-success').classList.add('hidden');
   selectedCategory = null;
@@ -1068,12 +1092,38 @@ function resetForm() {
 
 async function submitTask() {
   const subject = document.getElementById('inp-subject').value.trim();
-  const text = document.getElementById('inp-text').value.trim();
+  let text = document.getElementById('inp-text').value.trim();
   const urgent = document.getElementById('inp-urgent').checked;
   const errBox = document.getElementById('emp-error');
   const btn = document.getElementById('btn-submit');
   errBox.classList.add('hidden');
-  if (!subject || !text || !selectedCategory) { errBox.textContent = "Обери категорію, впиши тему і опиши запит."; errBox.classList.remove('hidden'); return; }
+
+  const isVideo = selectedCategory && catInfo(selectedCategory).isStructured === true;
+
+  if (!subject || !selectedCategory) { errBox.textContent = "Обери категорію і впиши тему."; errBox.classList.remove('hidden'); return; }
+
+  if (isVideo) {
+    const vidDate = document.getElementById('vid-date').value;
+    const vidFrom = document.getElementById('vid-time-from').value;
+    const vidTo = document.getElementById('vid-time-to').value;
+    const vidCamera = document.getElementById('vid-camera').value.trim();
+    const vidReason = document.getElementById('vid-reason').value.trim();
+    if (!vidDate || !vidFrom || !vidCamera || !vidReason) {
+      errBox.textContent = "Заповни дату, час від, номер камери/каси і причину запиту.";
+      errBox.classList.remove('hidden');
+      return;
+    }
+    text = 'Дата події: ' + vidDate +
+      '\nЧас: ' + vidFrom + (vidTo ? ' – ' + vidTo : '') +
+      '\nКамера/каса: ' + vidCamera +
+      '\nПричина: ' + vidReason +
+      (text ? '\n\nДодатково: ' + text : '');
+  } else if (!text) {
+    errBox.textContent = "Опиши суть запиту.";
+    errBox.classList.remove('hidden');
+    return;
+  }
+
   btn.disabled = true; btn.textContent = "Надсилаю...";
   const responsibleUid = routingCache[selectedCategory] || null;
   const initialParticipants = [currentUser.uid];
