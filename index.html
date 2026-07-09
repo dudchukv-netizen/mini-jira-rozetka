@@ -460,6 +460,12 @@
       </div>
 
       <div class="section-block">
+        <h3>Маршрутизація категорій</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Признач конкретну людину, яка відповідає за категорію (наприклад, підготовка відео) — вона автоматично отримає лист і стане учасником такої заявки.</p>
+        <div id="routing-list"></div>
+      </div>
+
+      <div class="section-block">
         <h3>Створити профіль працівника</h3>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;">
           <div><label class="field-label" style="margin-top:0;">Ім'я</label><input type="text" id="new-emp-firstname" placeholder="Олена"></div>
@@ -596,6 +602,8 @@ const auth = firebase.auth();
 const tasksRef = db.collection('tasks');
 const usersRef = db.collection('users');
 const branchesRef = db.collection('branches');
+const routingRef = db.collection('routing');
+let routingCache = {};
 
 // Secondary app instance so creating an employee account doesn't log the manager out
 const secondaryApp = firebase.initializeApp(firebaseConfig, "Secondary");
@@ -1033,7 +1041,11 @@ function selectCategory(id) {
   document.getElementById('form-area').classList.remove('hidden');
   const banner = document.getElementById('selected-cat-banner');
   banner.style.background = c.color + '18';
-  banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div><div class="selected-cat-title" style="color:' + c.color + ';">' + c.label + '</div><div class="selected-cat-hint">' + c.hint + '</div></div>';
+  const responsibleUid = routingCache[id];
+  const responsiblePerson = responsibleUid ? allUsersCache.find(u => u.id === responsibleUid) : null;
+  banner.innerHTML = '<div class="tile-icon" style="background:' + c.color + '33;color:' + c.color + ';">' + c.icon + '</div><div><div class="selected-cat-title" style="color:' + c.color + ';">' + c.label + '</div><div class="selected-cat-hint">' + c.hint + '</div>' +
+    (responsiblePerson ? '<div class="selected-cat-hint" style="margin-top:4px;font-weight:700;">📨 Обробляє: ' + escapeHtml(responsiblePerson.name) + '</div>' : '') +
+    '</div>';
   document.getElementById('inp-text').placeholder = c.hint;
 }
 
@@ -1063,11 +1075,14 @@ async function submitTask() {
   errBox.classList.add('hidden');
   if (!subject || !text || !selectedCategory) { errBox.textContent = "Обери категорію, впиши тему і опиши запит."; errBox.classList.remove('hidden'); return; }
   btn.disabled = true; btn.textContent = "Надсилаю...";
+  const responsibleUid = routingCache[selectedCategory] || null;
+  const initialParticipants = [currentUser.uid];
+  if (responsibleUid && !initialParticipants.includes(responsibleUid)) initialParticipants.push(responsibleUid);
   try {
     const docRef = await tasksRef.add({
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
-      participantUids: [currentUser.uid],
+      participantUids: initialParticipants,
       branchId: currentUserDoc.branchId || null,
       branchName: currentUserDoc.branchId ? branchName(currentUserDoc.branchId) : null,
       category: selectedCategory,
@@ -1079,7 +1094,8 @@ async function submitTask() {
       activity: [{ type: 'status', text: 'Заявку створено', createdAt: Date.now() }]
     });
     const privilegedUids = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
-    notifyEmails(privilegedUids, subject,
+    const recipients = [...new Set([...privilegedUids, ...(responsibleUid ? [responsibleUid] : [])])];
+    notifyEmails(recipients, subject,
       currentUserDoc.name + ' створив(ла) нову заявку "' + subject + '" (' + catInfo(selectedCategory).label + '):\n\n' + text,
       ticketLink(docRef.id));
     document.getElementById('emp-success').classList.remove('hidden');
@@ -1676,7 +1692,7 @@ function startUsersGlobal() {
     users.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     allUsersCache = users;
     teamUsersCache = users;
-    if (currentView === 'team') { renderTeam(users); renderBranchesList(); }
+    if (currentView === 'team') { renderTeam(users); renderBranchesList(); renderRoutingSection(); }
     if (currentUser && currentUserDoc) {
       const me = users.find(u => u.id === currentUser.uid);
       if (me) currentUserDoc = me;
@@ -1722,6 +1738,28 @@ function startBranchesGlobal() {
     if (sel1) sel1.innerHTML = branchOptionsHtml('');
     renderTeam(teamUsersCache);
   });
+  routingRef.onSnapshot(snapshot => {
+    routingCache = {};
+    snapshot.docs.forEach(d => { routingCache[d.id] = d.data().responsibleUid || null; });
+    renderRoutingSection();
+  });
+}
+
+function renderRoutingSection() {
+  const box = document.getElementById('routing-list');
+  if (!box) return;
+  const people = allUsersCache.filter(u => u.approved);
+  box.innerHTML = CATEGORIES.map(c => {
+    const current = routingCache[c.id] || '';
+    const options = '<option value="">Стандартно (керівник/адмін)</option>' +
+      people.map(u => '<option value="' + u.id + '"' + (u.id === current ? ' selected' : '') + '>' + escapeHtml(u.name) + '</option>').join('');
+    return '<div class="team-row"><div class="team-row-info"><span style="font-size:16px;margin-right:8px;">' + c.icon + '</span><span class="team-row-name">' + escapeHtml(c.label) + '</span></div>' +
+      '<select onchange="setCategoryResponsible(&quot;' + c.id + '&quot;, this.value)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;font-size:12.5px;background:var(--content-bg);color:var(--ink);">' + options + '</select></div>';
+  }).join('');
+}
+
+async function setCategoryResponsible(categoryId, uid) {
+  await routingRef.doc(categoryId).set({ responsibleUid: uid || null });
 }
 
 function renderBranchesList() {
