@@ -1824,7 +1824,11 @@ function renderRoutingSection() {
 }
 
 async function setCategoryResponsible(categoryId, uid) {
-  await routingRef.doc(categoryId).set({ responsibleUid: uid || null });
+  try {
+    await routingRef.doc(categoryId).set({ responsibleUid: uid || null });
+  } catch (e) {
+    alert('Не вдалося зберегти: ' + e.message);
+  }
 }
 
 function renderBranchesList() {
