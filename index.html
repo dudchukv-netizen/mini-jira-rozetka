@@ -789,9 +789,11 @@ async function doRegister() {
   const btn = document.getElementById('btn-register');
   btn.disabled = true; btn.textContent = "Реєструю...";
   try {
-    const usersSnap = await usersRef.limit(1).get();
-    const isFirst = usersSnap.empty;
     const cred = await auth.createUserWithEmailAndPassword(email, password);
+    const metaRef = db.collection('meta').doc('setup');
+    const metaSnap = await metaRef.get();
+    const isFirst = !metaSnap.exists || metaSnap.data().managerExists !== true;
+    if (isFirst) { await metaRef.set({ managerExists: true }); }
     const fullName = (firstName + ' ' + lastName).trim();
     await usersRef.doc(cred.user.uid).set({
       name: fullName, firstName: firstName, lastName: lastName,
@@ -1065,6 +1067,7 @@ function selectCategory(id) {
   document.getElementById('video-fields-box').classList.toggle('hidden', !isVideo);
   document.getElementById('inp-text-label').textContent = isVideo ? 'Додаткові деталі (необов\'язково)' : 'Опис';
   document.getElementById('inp-text').placeholder = isVideo ? 'Будь-що додаткове, якщо потрібно' : c.hint;
+  document.getElementById('inp-subject').placeholder = isVideo ? 'Наприклад: Перевірка недостачі на касі 2' : 'Наприклад: Заміна картриджів';
 }
 
 document.getElementById('btn-change-cat').onclick = () => {
