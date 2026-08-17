@@ -458,6 +458,47 @@
       <div id="archive-list"></div>
     </section>
 
+    <section id="view-voting" class="view">
+      <h1 class="page-title">Голосування</h1>
+      <p class="page-sub">Створи опитування — воно піде в Telegram-групи обраних підрозділів</p>
+      <div class="section-block">
+        <label class="field-label" style="margin-top:0;">Тема голосування</label>
+        <input type="text" id="vote-question" placeholder="Наприклад: Коли зручно провести інвентаризацію?">
+        <label class="field-label">Варіанти відповіді</label>
+        <div id="vote-options-list"></div>
+        <button class="btn-ghost" style="margin-top:6px;" onclick="addVoteOption()">+ Додати варіант</button>
+        <div style="margin-top:14px;display:flex;gap:16px;flex-wrap:wrap;">
+          <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-multiple"> Дозволити декілька відповідей</label>
+          <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-anonymous" checked> Анонімне голосування</label>
+        </div>
+        <label class="field-label">Підрозділи</label>
+        <div id="vote-branch-list" style="max-height:220px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
+        <div id="vote-error" class="error-box hidden"></div>
+        <div class="btn-submit-row"><button class="btn-primary" onclick="submitVote()" id="btn-vote">Надіслати голосування</button></div>
+        <div id="vote-success" class="success-box hidden"></div>
+      </div>
+    </section>
+
+    <section id="view-reminders" class="view">
+      <h1 class="page-title">Нагадування</h1>
+      <p class="page-sub">Особисті нагадування, що періодично повертаються</p>
+      <div class="section-block">
+        <label class="field-label" style="margin-top:0;">Текст нагадування</label>
+        <input type="text" id="rem-text" placeholder="Наприклад: Перевірити звіт по касах">
+        <label class="field-label">Повторювати кожні</label>
+        <select id="rem-interval" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+          <option value="1">День</option>
+          <option value="7" selected>Тиждень</option>
+          <option value="30">Місяць</option>
+        </select>
+        <div class="btn-submit-row"><button class="btn-primary" onclick="addReminder()">+ Додати нагадування</button></div>
+      </div>
+      <div class="section-block">
+        <h3>Мої нагадування</h3>
+        <div id="reminders-list"></div>
+      </div>
+    </section>
+
     <section id="view-team" class="view">
       <h1 class="page-title">Працівники</h1>
       <p class="page-sub">Підрозділи, створення профілів та підтвердження реєстрацій</p>
@@ -581,6 +622,10 @@
             <button class="btn-primary" style="width:100%;margin-top:6px;padding:9px;font-size:13px;" onclick="applyStatusChange()">Зберегти статус</button>
           </div>
           <div id="archive-box" style="margin-bottom:14px;"></div>
+          <div id="completion-block" class="sidebar-block hidden">
+            <div class="sidebar-label">Хто виконав</div>
+            <div id="completion-list"></div>
+          </div>
           <div class="sidebar-block">
             <div class="sidebar-label">Учасники заявки</div>
             <div id="ticket-participants"></div>
@@ -921,6 +966,8 @@ function bootApp() {
         { view: 'assignments', ic: '📌', label: 'Задачі' },
         { view: 'archive', ic: '🗄️', label: 'Архів' },
         { view: 'team', ic: '👥', label: 'Працівники' },
+        { view: 'voting', ic: '📊', label: 'Голосування' },
+        { view: 'reminders', ic: '🔔', label: 'Нагадування' },
         { view: 'help', ic: '❓', label: 'Довідка' },
       ]
     : [
@@ -1016,6 +1063,8 @@ function switchView(view) {
   if (view === 'team') startTeam();
   if (view === 'assignments') startAssignments();
   if (view === 'archive') startArchive();
+  if (view === 'voting') startVoting();
+  if (view === 'reminders') startReminders();
 }
 
 function toggleMobileMenu() {
@@ -1134,8 +1183,8 @@ async function submitTask() {
 
   btn.disabled = true; btn.textContent = "Надсилаю...";
   const responsibleUid = routingCache[selectedCategory] || null;
-  const initialParticipants = [currentUser.uid];
-  if (responsibleUid && !initialParticipants.includes(responsibleUid)) initialParticipants.push(responsibleUid);
+  const privilegedUidsAtCreate = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
+  const initialParticipants = [...new Set([currentUser.uid, ...privilegedUidsAtCreate, ...(responsibleUid ? [responsibleUid] : [])])];
   try {
     const docRef = await tasksRef.add({
       author: currentUserDoc.name,
@@ -1376,6 +1425,8 @@ async function createAssignment() {
   }
 
   btn.disabled = true; btn.textContent = "Надсилаю...";
+  const privilegedUidsAsg = allUsersCache.filter(u => isPrivileged(u.role)).map(u => u.id);
+  const asgParticipants = [...new Set([currentUser.uid, ...privilegedUidsAsg, ...assigneeUids])];
   try {
     const docRef = await tasksRef.add({
       kind: 'assignment',
@@ -1383,7 +1434,7 @@ async function createAssignment() {
       text: text,
       author: currentUserDoc.name,
       authorUid: currentUser.uid,
-      participantUids: [currentUser.uid, ...assigneeUids],
+      participantUids: asgParticipants,
       branchId: branchId,
       branchName: branchId ? branchName(branchId) : null,
       priority: urgent ? "urgent" : "normal",
@@ -1469,6 +1520,124 @@ function renderArchiveList() {
   if (items.length === 0) { list.innerHTML = '<div class="empty-note">Архів порожній</div>'; return; }
   items.forEach(t => list.appendChild(renderCard(t, 'archive')));
 }
+
+// ======= VOTING (Telegram polls) =======
+let voteOptionCount = 0;
+function startVoting() {
+  document.getElementById('vote-options-list').innerHTML = '';
+  voteOptionCount = 0;
+  addVoteOption(); addVoteOption();
+  document.getElementById('vote-question').value = '';
+  document.getElementById('vote-multiple').checked = false;
+  document.getElementById('vote-anonymous').checked = true;
+  document.getElementById('vote-error').classList.add('hidden');
+  document.getElementById('vote-success').classList.add('hidden');
+  renderVoteBranchList();
+}
+
+function addVoteOption() {
+  voteOptionCount++;
+  const box = document.getElementById('vote-options-list');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
+  row.innerHTML = '<input type="text" class="vote-option-input" placeholder="Варіант ' + voteOptionCount + '" style="flex:1;margin:0;">' +
+    '<button class="btn-delete" onclick="this.parentElement.remove()">✕</button>';
+  box.appendChild(row);
+}
+
+function renderVoteBranchList() {
+  const box = document.getElementById('vote-branch-list');
+  const withTg = branchesCache.filter(b => b.telegramChatId);
+  if (withTg.length === 0) {
+    box.innerHTML = '<div class="empty-note">Жоден підрозділ ще не має підключеного Telegram Chat ID (додай у "Працівники → Підрозділи")</div>';
+    return;
+  }
+  box.innerHTML = branchesCache.map(b => {
+    const disabled = !b.telegramChatId;
+    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
+      '<input type="checkbox" class="vote-branch-check" value="' + b.id + '"' + (disabled ? ' disabled' : '') + '> ' + escapeHtml(b.name) + (disabled ? ' (немає Chat ID)' : '') +
+      '</label>';
+  }).join('');
+}
+
+async function submitVote() {
+  const question = document.getElementById('vote-question').value.trim();
+  const options = Array.from(document.querySelectorAll('.vote-option-input')).map(i => i.value.trim()).filter(v => v);
+  const allowsMultiple = document.getElementById('vote-multiple').checked;
+  const isAnonymous = document.getElementById('vote-anonymous').checked;
+  const chatIds = Array.from(document.querySelectorAll('.vote-branch-check:checked')).map(el => {
+    const b = branchesCache.find(x => x.id === el.value);
+    return b ? b.telegramChatId : null;
+  }).filter(Boolean);
+  const errBox = document.getElementById('vote-error');
+  const okBox = document.getElementById('vote-success');
+  errBox.classList.add('hidden'); okBox.classList.add('hidden');
+
+  if (!question || options.length < 2 || chatIds.length === 0) {
+    errBox.textContent = "Впиши тему, щонайменше 2 варіанти і обери хоча б один підрозділ.";
+    errBox.classList.remove('hidden');
+    return;
+  }
+
+  const btn = document.getElementById('btn-vote');
+  btn.disabled = true; btn.textContent = "Надсилаю...";
+  try {
+    await fetch(MAIL_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        type: 'telegram_poll',
+        chatIds: chatIds,
+        question: question,
+        options: options,
+        allowsMultiple: allowsMultiple,
+        isAnonymous: isAnonymous
+      })
+    });
+    okBox.textContent = "Голосування надіслано в " + chatIds.length + " груп(и).";
+    okBox.classList.remove('hidden');
+  } catch (e) {
+    errBox.textContent = "Не вдалося надіслати: " + e.message;
+    errBox.classList.remove('hidden');
+  } finally {
+    btn.disabled = false; btn.textContent = "Надіслати голосування";
+  }
+}
+
+// ======= REMINDERS =======
+const remindersRef = db.collection('reminders');
+let unsubscribeReminders = null;
+function startReminders() {
+  if (unsubscribeReminders) unsubscribeReminders();
+  unsubscribeReminders = remindersRef.where('createdBy', '==', currentUser.uid).onSnapshot(snapshot => {
+    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.lastResetAt - b.lastResetAt);
+    renderReminders(items);
+  });
+}
+
+function renderReminders(items) {
+  const box = document.getElementById('reminders-list');
+  if (items.length === 0) { box.innerHTML = '<div class="empty-note">Ще немає нагадувань</div>'; return; }
+  const now = Date.now();
+  box.innerHTML = items.map(r => {
+    const due = (now - r.lastResetAt) >= r.intervalDays * 86400000;
+    const label = r.intervalDays === 1 ? 'щодня' : r.intervalDays === 7 ? 'щотижня' : r.intervalDays === 30 ? 'щомісяця' : ('кожні ' + r.intervalDays + ' дн.');
+    return '<div class="team-row" style="' + (due ? 'border-color:#B4482F;background:#B4482F11;' : '') + '"><div class="team-row-info"><div class="user-avatar" style="background:' + (due ? '#B4482F' : '#3B8C82') + ';">🔔</div><div><div class="team-row-name">' + escapeHtml(r.text) + (due ? ' <span class="role-tag" style="background:#B4482F;color:#fff;">ЧАС!</span>' : '') + '</div><div class="team-row-email">Повтор: ' + label + '</div></div></div>' +
+      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">Скинути</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
+  }).join('');
+}
+
+async function addReminder() {
+  const text = document.getElementById('rem-text').value.trim();
+  const intervalDays = parseInt(document.getElementById('rem-interval').value, 10);
+  if (!text) return;
+  await remindersRef.add({ text: text, intervalDays: intervalDays, lastResetAt: Date.now(), createdBy: currentUser.uid, createdAt: Date.now() });
+  document.getElementById('rem-text').value = '';
+}
+
+async function resetReminder(id) { await remindersRef.doc(id).update({ lastResetAt: Date.now() }); }
+async function deleteReminder(id) { await remindersRef.doc(id).delete(); }
 
 async function archiveTask(id) {
   await tasksRef.doc(id).update({ archived: true });
@@ -1604,6 +1773,28 @@ function renderTicket(task) {
     addParticipantBox.classList.add('hidden');
   }
 
+  const completionBlock = document.getElementById('completion-block');
+  if (task.kind === 'assignment') {
+    const assignees = (task.participantUids || []).filter(uid => uid !== task.authorUid && !(allUsersCache.find(u => u.id === uid) && isPrivileged(allUsersCache.find(u => u.id === uid).role)));
+    if (assignees.length > 1) {
+      completionBlock.classList.remove('hidden');
+      const completedBy = task.completedBy || [];
+      const iAmAssignee = assignees.includes(currentUser.uid);
+      let cHtml = assignees.map(uid => {
+        const done = completedBy.includes(uid);
+        return '<div class="participant-row"><span>' + (done ? '✅' : '⬜') + ' ' + escapeHtml(userName(uid)) + '</span></div>';
+      }).join('');
+      if (iAmAssignee && !completedBy.includes(currentUser.uid)) {
+        cHtml += '<button class="btn-primary" style="width:100%;margin-top:8px;padding:8px;font-size:12.5px;" onclick="markMyCompletion()">Я виконав(ла)</button>';
+      }
+      document.getElementById('completion-list').innerHTML = cHtml;
+    } else {
+      completionBlock.classList.add('hidden');
+    }
+  } else {
+    completionBlock.classList.add('hidden');
+  }
+
   const participantsBox = document.getElementById('ticket-participants');
   const participantIds = task.participantUids && task.participantUids.length ? task.participantUids : [task.authorUid];
   let pHtml = '';
@@ -1649,6 +1840,17 @@ function renderTicket(task) {
     }
     return '<div class="activity-item"><div class="activity-status-bar"><span class="activity-status-text">' + escapeHtml(a.text) + tag + '</span><span class="activity-status-time">' + fullDate(a.createdAt) + '</span></div></div>';
   }).join('');
+}
+
+async function markMyCompletion() {
+  if (!currentTicketId) return;
+  const entry = { type: 'status', text: currentUserDoc.name + ' позначив(ла) свою частину виконаною', createdAt: Date.now() };
+  try {
+    await tasksRef.doc(currentTicketId).update({
+      completedBy: firebase.firestore.FieldValue.arrayUnion(currentUser.uid),
+      activity: firebase.firestore.FieldValue.arrayUnion(entry)
+    });
+  } catch (e) { showError('Не вдалося зберегти: ' + e.message); }
 }
 
 async function addParticipant() {
@@ -1779,6 +1981,7 @@ function startTeam() {
   const sel1 = document.getElementById('new-emp-branch');
   if (sel1) sel1.innerHTML = branchOptionsHtml('');
   renderTeam(teamUsersCache);
+  renderRoutingSection();
 }
 
 function branchName(branchId) {
@@ -1840,8 +2043,17 @@ function renderBranchesList() {
   }
   box.innerHTML = branchesCache.map(b => {
     const count = teamUsersCache.filter(u => u.branchId === b.id).length;
-    return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#3B8C82;">🏬</div><div><div class="team-row-name">' + escapeHtml(b.name) + '</div><div class="team-row-email">' + count + ' працівник(ів)</div></div></div><button class="btn-delete" title="Видалити підрозділ" onclick="deleteBranch(&quot;' + b.id + '&quot;)">✕</button></div>';
+    return '<div class="team-row" style="flex-wrap:wrap;"><div class="team-row-info"><div class="user-avatar" style="background:#3B8C82;">🏬</div><div><div class="team-row-name">' + escapeHtml(b.name) + '</div><div class="team-row-email">' + count + ' працівник(ів)</div></div></div>' +
+      '<div style="display:flex;gap:6px;align-items:center;">' +
+      '<input type="text" placeholder="Telegram Chat ID" value="' + escapeHtml(b.telegramChatId || '') + '" style="width:140px;padding:6px 8px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:var(--content-bg);color:var(--ink);" onblur="setBranchTelegram(&quot;' + b.id + '&quot;, this.value)">' +
+      '<button class="btn-delete" title="Видалити підрозділ" onclick="deleteBranch(&quot;' + b.id + '&quot;)">✕</button>' +
+      '</div></div>';
   }).join('');
+}
+
+async function setBranchTelegram(branchId, chatId) {
+  try { await branchesRef.doc(branchId).update({ telegramChatId: chatId.trim() || null }); }
+  catch (e) { alert('Не вдалося зберегти Chat ID: ' + e.message); }
 }
 
 async function addBranch() {
