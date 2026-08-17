@@ -405,6 +405,8 @@
 
         <label class="field-label" id="inp-text-label">Опис</label>
         <textarea id="inp-text" rows="4" placeholder="Коротко, у чому суть запиту"></textarea>
+        <label class="field-label">Дедлайн (необов'язково)</label>
+        <input type="date" id="inp-deadline">
         <label class="urgent-row"><input type="checkbox" id="inp-urgent"> Це термінове</label>
         <div id="emp-error" class="error-box hidden"></div>
         <div class="btn-submit-row"><button class="btn-primary" id="btn-submit" onclick="submitTask()">Надіслати заявку</button></div>
@@ -438,6 +440,8 @@
             </select>
           </div>
         </div>
+        <label class="field-label">Дедлайн (необов'язково)</label>
+        <input type="date" id="asg-deadline">
         <label class="urgent-row"><input type="checkbox" id="asg-urgent"> Це термінове</label>
         <label class="field-label">Виконавці (можна декілька)</label>
         <div id="asg-employee-list" style="max-height:220px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
@@ -471,11 +475,17 @@
           <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-multiple"> Дозволити декілька відповідей</label>
           <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-anonymous" checked> Анонімне голосування</label>
         </div>
-        <label class="field-label">Підрозділи</label>
+        <label class="field-label">Telegram-групи</label>
         <div id="vote-branch-list" style="max-height:220px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
         <div id="vote-error" class="error-box hidden"></div>
         <div class="btn-submit-row"><button class="btn-primary" onclick="submitVote()" id="btn-vote">Надіслати голосування</button></div>
         <div id="vote-success" class="success-box hidden"></div>
+      </div>
+
+      <div class="section-block">
+        <h3>Останні голосування</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">"Дублювати" підставить тему й варіанти в форму вище — залишиться перевірити й натиснути "Надіслати" ще раз.</p>
+        <div id="poll-history-list"></div>
       </div>
     </section>
 
@@ -511,6 +521,18 @@
           <button class="btn-primary" onclick="addBranch()">+ Додати підрозділ</button>
         </div>
         <div id="branch-error" class="error-box hidden"></div>
+      </div>
+
+      <div class="section-block">
+        <h3>Telegram-групи (для голосувань)</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 12px;">Не прив'язано до підрозділів — додай стільки груп, скільки реально є (навіть одну спільну для всіх).</p>
+        <div id="tg-groups-list" style="margin-bottom:14px;"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <input type="text" id="new-tg-name" placeholder="Назва (напр. Загальна група)" style="flex:1;min-width:160px;margin:0;">
+          <input type="text" id="new-tg-chatid" placeholder="Chat ID (напр. -1001234567890)" style="flex:1;min-width:180px;margin:0;">
+          <button class="btn-primary" onclick="addTelegramGroup()">+ Додати групу</button>
+        </div>
+        <div id="tg-group-error" class="error-box hidden"></div>
       </div>
 
       <div class="section-block">
@@ -757,6 +779,10 @@ function isOldEnoughToArchive(task) {
   if (task.archived) return true;
   if (task.status !== 'done' && task.status !== 'rejected') return false;
   return (Date.now() - task.createdAt) > ARCHIVE_DAYS * 86400000;
+}
+function isDeadlineOverdue(task) {
+  if (!task.deadline || task.status === 'done' || task.status === 'rejected') return false;
+  return new Date(task.deadline + 'T23:59:59') < new Date();
 }
 let currentTicketId = null;
 let ticketReturnView = 'board';
@@ -1136,6 +1162,7 @@ function resetForm() {
   document.getElementById('inp-subject').value = '';
   document.getElementById('inp-text').value = '';
   document.getElementById('inp-urgent').checked = false;
+  document.getElementById('inp-deadline').value = '';
   document.getElementById('vid-date').value = '';
   document.getElementById('vid-time-from').value = '';
   document.getElementById('vid-time-to').value = '';
@@ -1151,6 +1178,7 @@ async function submitTask() {
   const subject = document.getElementById('inp-subject').value.trim();
   let text = document.getElementById('inp-text').value.trim();
   const urgent = document.getElementById('inp-urgent').checked;
+  const deadline = document.getElementById('inp-deadline').value || null;
   const errBox = document.getElementById('emp-error');
   const btn = document.getElementById('btn-submit');
   errBox.classList.add('hidden');
@@ -1196,6 +1224,7 @@ async function submitTask() {
       category: selectedCategory,
       subject: subject,
       priority: urgent ? "urgent" : "normal",
+      deadline: deadline,
       text: text,
       status: "new",
       createdAt: Date.now(),
@@ -1412,6 +1441,7 @@ async function createAssignment() {
   const text = document.getElementById('asg-text').value.trim();
   const branchId = document.getElementById('asg-branch').value || null;
   const urgent = document.getElementById('asg-urgent').checked;
+  const deadline = document.getElementById('asg-deadline').value || null;
   const assigneeUids = Array.from(document.querySelectorAll('.asg-emp-check:checked')).map(el => el.value);
   const errBox = document.getElementById('asg-error');
   const okBox = document.getElementById('asg-success');
@@ -1438,6 +1468,7 @@ async function createAssignment() {
       branchId: branchId,
       branchName: branchId ? branchName(branchId) : null,
       priority: urgent ? "urgent" : "normal",
+      deadline: deadline,
       status: "new",
       createdAt: Date.now(),
       activity: [{ type: 'status', text: 'Задачу створено', createdAt: Date.now() }]
@@ -1450,6 +1481,7 @@ async function createAssignment() {
     document.getElementById('asg-subject').value = '';
     document.getElementById('asg-text').value = '';
     document.getElementById('asg-urgent').checked = false;
+    document.getElementById('asg-deadline').value = '';
     document.querySelectorAll('.asg-emp-check').forEach(el => el.checked = false);
   } catch (e) {
     errBox.textContent = "Не вдалося надіслати задачу: " + e.message;
@@ -1523,7 +1555,10 @@ function renderArchiveList() {
 
 // ======= VOTING (Telegram polls) =======
 let voteOptionCount = 0;
+let editingPollId = null;
+
 function startVoting() {
+  editingPollId = null;
   document.getElementById('vote-options-list').innerHTML = '';
   voteOptionCount = 0;
   addVoteOption(); addVoteOption();
@@ -1532,32 +1567,32 @@ function startVoting() {
   document.getElementById('vote-anonymous').checked = true;
   document.getElementById('vote-error').classList.add('hidden');
   document.getElementById('vote-success').classList.add('hidden');
-  renderVoteBranchList();
+  renderVoteGroupList();
+  startPollHistory();
 }
 
-function addVoteOption() {
+function addVoteOption(prefillValue) {
   voteOptionCount++;
   const box = document.getElementById('vote-options-list');
   const row = document.createElement('div');
   row.style.cssText = 'display:flex;gap:6px;margin-top:6px;';
-  row.innerHTML = '<input type="text" class="vote-option-input" placeholder="Варіант ' + voteOptionCount + '" style="flex:1;margin:0;">' +
+  row.innerHTML = '<input type="text" class="vote-option-input" placeholder="Варіант ' + voteOptionCount + '" style="flex:1;margin:0;" value="' + (prefillValue ? escapeHtml(prefillValue) : '') + '">' +
     '<button class="btn-delete" onclick="this.parentElement.remove()">✕</button>';
   box.appendChild(row);
 }
 
-function renderVoteBranchList() {
+function renderVoteGroupList() {
   const box = document.getElementById('vote-branch-list');
-  const withTg = branchesCache.filter(b => b.telegramChatId);
-  if (withTg.length === 0) {
-    box.innerHTML = '<div class="empty-note">Жоден підрозділ ще не має підключеного Telegram Chat ID (додай у "Працівники → Підрозділи")</div>';
+  if (!box) return;
+  if (telegramGroupsCache.length === 0) {
+    box.innerHTML = '<div class="empty-note">Ще немає жодної Telegram-групи (додай у "Працівники → Telegram-групи")</div>';
     return;
   }
-  box.innerHTML = branchesCache.map(b => {
-    const disabled = !b.telegramChatId;
-    return '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:' + (disabled ? 'not-allowed' : 'pointer') + ';opacity:' + (disabled ? '0.4' : '1') + ';">' +
-      '<input type="checkbox" class="vote-branch-check" value="' + b.id + '"' + (disabled ? ' disabled' : '') + '> ' + escapeHtml(b.name) + (disabled ? ' (немає Chat ID)' : '') +
-      '</label>';
-  }).join('');
+  box.innerHTML = telegramGroupsCache.map(g =>
+    '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:pointer;">' +
+    '<input type="checkbox" class="vote-branch-check" value="' + g.id + '"> ✈️ ' + escapeHtml(g.name) +
+    '</label>'
+  ).join('');
 }
 
 async function submitVote() {
@@ -1565,16 +1600,17 @@ async function submitVote() {
   const options = Array.from(document.querySelectorAll('.vote-option-input')).map(i => i.value.trim()).filter(v => v);
   const allowsMultiple = document.getElementById('vote-multiple').checked;
   const isAnonymous = document.getElementById('vote-anonymous').checked;
-  const chatIds = Array.from(document.querySelectorAll('.vote-branch-check:checked')).map(el => {
-    const b = branchesCache.find(x => x.id === el.value);
-    return b ? b.telegramChatId : null;
+  const selectedGroupIds = Array.from(document.querySelectorAll('.vote-branch-check:checked')).map(el => el.value);
+  const chatIds = selectedGroupIds.map(id => {
+    const g = telegramGroupsCache.find(x => x.id === id);
+    return g ? g.chatId : null;
   }).filter(Boolean);
   const errBox = document.getElementById('vote-error');
   const okBox = document.getElementById('vote-success');
   errBox.classList.add('hidden'); okBox.classList.add('hidden');
 
   if (!question || options.length < 2 || chatIds.length === 0) {
-    errBox.textContent = "Впиши тему, щонайменше 2 варіанти і обери хоча б один підрозділ.";
+    errBox.textContent = "Впиши тему, щонайменше 2 варіанти і обери хоча б одну групу.";
     errBox.classList.remove('hidden');
     return;
   }
@@ -1595,6 +1631,10 @@ async function submitVote() {
         isAnonymous: isAnonymous
       })
     });
+    await pollsRef.add({
+      question: question, options: options, allowsMultiple: allowsMultiple, isAnonymous: isAnonymous,
+      groupIds: selectedGroupIds, createdBy: currentUser.uid, createdByName: currentUserDoc.name, createdAt: Date.now()
+    });
     okBox.textContent = "Голосування надіслано в " + chatIds.length + " груп(и).";
     okBox.classList.remove('hidden');
   } catch (e) {
@@ -1603,6 +1643,49 @@ async function submitVote() {
   } finally {
     btn.disabled = false; btn.textContent = "Надіслати голосування";
   }
+}
+
+// ---- Poll history / duplicate ----
+const pollsRef = db.collection('polls');
+let unsubscribePolls = null;
+let pollsCache = [];
+
+function startPollHistory() {
+  if (unsubscribePolls) unsubscribePolls();
+  unsubscribePolls = pollsRef.orderBy('createdAt', 'desc').limit(20).onSnapshot(snap => {
+    pollsCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderPollHistory();
+  });
+}
+
+function renderPollHistory() {
+  const box = document.getElementById('poll-history-list');
+  if (!box) return;
+  if (pollsCache.length === 0) { box.innerHTML = '<div class="empty-note">Ще не було голосувань</div>'; return; }
+  box.innerHTML = pollsCache.map(p => {
+    const groupNames = (p.groupIds || []).map(id => { const g = telegramGroupsCache.find(x => x.id === id); return g ? g.name : '?'; }).join(', ');
+    return '<div class="team-row" style="flex-wrap:wrap;"><div class="team-row-info"><div class="user-avatar" style="background:#229ED9;">📊</div><div><div class="team-row-name">' + escapeHtml(p.question) + '</div><div class="team-row-email">' + (p.options || []).length + ' варіант(и) · ' + escapeHtml(groupNames || 'без групи') + '</div></div></div>' +
+      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="duplicatePoll(&quot;' + p.id + '&quot;)">Дублювати</button></div></div>';
+  }).join('');
+}
+
+function duplicatePoll(id) {
+  const p = pollsCache.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('vote-question').value = p.question;
+  document.getElementById('vote-multiple').checked = !!p.allowsMultiple;
+  document.getElementById('vote-anonymous').checked = p.isAnonymous !== false;
+  document.getElementById('vote-options-list').innerHTML = '';
+  voteOptionCount = 0;
+  (p.options || []).forEach(opt => addVoteOption(opt));
+  renderVoteGroupList();
+  setTimeout(() => {
+    (p.groupIds || []).forEach(gid => {
+      const cb = document.querySelector('.vote-branch-check[value="' + gid + '"]');
+      if (cb) cb.checked = true;
+    });
+  }, 50);
+  document.getElementById('vote-question').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ======= REMINDERS =======
@@ -1680,6 +1763,10 @@ function renderCard(task, fromView) {
   html += '<span class="cat-badge" style="background:' + cat.color + ';">' + cat.icon + ' ' + escapeHtml(cat.label) + '</span>';
   if (task.priority === 'urgent') html += '<span class="urgent-flag">⚠ ТЕРМІНОВО</span>';
   html += '</div>';
+  if (task.deadline) {
+    const overdue = isDeadlineOverdue(task);
+    html += '<div style="font-size:11.5px;font-weight:700;margin-top:6px;color:' + (overdue ? '#B4482F' : 'var(--muted)') + ';">📅 ' + (overdue ? 'Прострочено: ' : 'Дедлайн: ') + task.deadline + '</div>';
+  }
   html += '<p class="task-text">' + (task.subject ? '<b>' + escapeHtml(task.subject) + '</b><br><span style="font-weight:400;color:var(--muted);font-size:13px;">' + escapeHtml(task.text) + '</span>' : escapeHtml(task.text)) + '</p>';
   html += '<div class="task-meta"><span>👤 ' + escapeHtml(task.author) + (task.branchName ? ' · 🏬 ' + escapeHtml(task.branchName) : '') + '</span><span>' + (task.qualityRating ? '<span style="color:#C98A2E;">' + '★'.repeat(task.qualityRating) + '</span> · ' : '') + timeAgo(task.createdAt) + (commentCount ? ' · 💬 ' + commentCount : '') + '</span></div>';
   html += '<div class="task-actions">';
@@ -1823,6 +1910,7 @@ function renderTicket(task) {
     '<div class="detail-row"><div class="detail-label">Категорія</div><div class="detail-value">' + cat.icon + ' ' + escapeHtml(cat.label) + '</div></div>' +
     (task.branchName ? '<div class="detail-row"><div class="detail-label">Підрозділ</div><div class="detail-value">🏬 ' + escapeHtml(task.branchName) + '</div></div>' : '') +
     '<div class="detail-row"><div class="detail-label">Терміновість</div><div class="detail-value">' + (task.priority === 'urgent' ? '⚠ Термінове' : 'Звичайне') + '</div></div>' +
+    (task.deadline ? '<div class="detail-row"><div class="detail-label">Дедлайн</div><div class="detail-value" style="' + (isDeadlineOverdue(task) ? 'color:#B4482F;' : '') + '">📅 ' + task.deadline + (isDeadlineOverdue(task) ? ' (прострочено)' : '') + '</div></div>' : '') +
     '<div class="detail-row"><div class="detail-label">Створено</div><div class="detail-value">' + fullDate(task.createdAt) + '</div></div>' +
     '<div class="detail-row"><div class="detail-label">Статус</div><div class="detail-value">' + escapeHtml(status.label) + '</div></div>' +
     (task.qualityRating ? '<div class="detail-row"><div class="detail-label">Оцінка виконання</div><div class="detail-value" style="color:#C98A2E;">' + '★'.repeat(task.qualityRating) + '☆'.repeat(5 - task.qualityRating) + '</div></div>' : '');
@@ -2011,6 +2099,46 @@ function startBranchesGlobal() {
     snapshot.docs.forEach(d => { routingCache[d.id] = d.data().responsibleUid || null; });
     renderRoutingSection();
   });
+  telegramGroupsRef.onSnapshot(snapshot => {
+    telegramGroupsCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    telegramGroupsCache.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    renderTelegramGroupsList();
+    renderVoteGroupList();
+  });
+}
+
+const telegramGroupsRef = db.collection('telegramGroups');
+let telegramGroupsCache = [];
+
+function renderTelegramGroupsList() {
+  const box = document.getElementById('tg-groups-list');
+  if (!box) return;
+  if (telegramGroupsCache.length === 0) {
+    box.innerHTML = '<div class="empty-note">Ще немає жодної групи — додай нижче</div>';
+    return;
+  }
+  box.innerHTML = telegramGroupsCache.map(g =>
+    '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#229ED9;">✈️</div><div><div class="team-row-name">' + escapeHtml(g.name) + '</div><div class="team-row-email">' + escapeHtml(g.chatId) + '</div></div></div><button class="btn-delete" onclick="deleteTelegramGroup(&quot;' + g.id + '&quot;)">✕</button></div>'
+  ).join('');
+}
+
+async function addTelegramGroup() {
+  const nameInput = document.getElementById('new-tg-name');
+  const chatInput = document.getElementById('new-tg-chatid');
+  const name = nameInput.value.trim();
+  const chatId = chatInput.value.trim();
+  const errBox = document.getElementById('tg-group-error');
+  errBox.classList.add('hidden');
+  if (!name || !chatId) { errBox.textContent = "Впиши назву і Chat ID."; errBox.classList.remove('hidden'); return; }
+  try {
+    await telegramGroupsRef.add({ name: name, chatId: chatId, createdAt: Date.now() });
+    nameInput.value = ''; chatInput.value = '';
+  } catch (e) { errBox.textContent = "Не вдалося додати: " + e.message; errBox.classList.remove('hidden'); }
+}
+
+async function deleteTelegramGroup(id) {
+  if (!confirm('Видалити цю групу зі списку?')) return;
+  await telegramGroupsRef.doc(id).delete();
 }
 
 function renderRoutingSection() {
@@ -2043,17 +2171,8 @@ function renderBranchesList() {
   }
   box.innerHTML = branchesCache.map(b => {
     const count = teamUsersCache.filter(u => u.branchId === b.id).length;
-    return '<div class="team-row" style="flex-wrap:wrap;"><div class="team-row-info"><div class="user-avatar" style="background:#3B8C82;">🏬</div><div><div class="team-row-name">' + escapeHtml(b.name) + '</div><div class="team-row-email">' + count + ' працівник(ів)</div></div></div>' +
-      '<div style="display:flex;gap:6px;align-items:center;">' +
-      '<input type="text" placeholder="Telegram Chat ID" value="' + escapeHtml(b.telegramChatId || '') + '" style="width:140px;padding:6px 8px;font-size:12px;border:1.5px solid var(--border);border-radius:6px;background:var(--content-bg);color:var(--ink);" onblur="setBranchTelegram(&quot;' + b.id + '&quot;, this.value)">' +
-      '<button class="btn-delete" title="Видалити підрозділ" onclick="deleteBranch(&quot;' + b.id + '&quot;)">✕</button>' +
-      '</div></div>';
+    return '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#3B8C82;">🏬</div><div><div class="team-row-name">' + escapeHtml(b.name) + '</div><div class="team-row-email">' + count + ' працівник(ів)</div></div></div><button class="btn-delete" title="Видалити підрозділ" onclick="deleteBranch(&quot;' + b.id + '&quot;)">✕</button></div>';
   }).join('');
-}
-
-async function setBranchTelegram(branchId, chatId) {
-  try { await branchesRef.doc(branchId).update({ telegramChatId: chatId.trim() || null }); }
-  catch (e) { alert('Не вдалося зберегти Chat ID: ' + e.message); }
 }
 
 async function addBranch() {
