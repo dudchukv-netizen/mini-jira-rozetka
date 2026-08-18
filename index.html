@@ -463,9 +463,9 @@
     </section>
 
     <section id="view-voting" class="view">
-      <h1 class="page-title">Голосування</h1>
+      <h1 class="page-title">📊 Голосування</h1>
       <p class="page-sub">Створи опитування — воно піде в Telegram-групи обраних підрозділів</p>
-      <div class="section-block">
+      <div class="section-block" style="border-top:3px solid #229ED9;">
         <label class="field-label" style="margin-top:0;">Тема голосування</label>
         <input type="text" id="vote-question" placeholder="Наприклад: Коли зручно провести інвентаризацію?">
         <label class="field-label">Варіанти відповіді</label>
@@ -475,6 +475,20 @@
           <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-multiple"> Дозволити декілька відповідей</label>
           <label class="urgent-row" style="margin:0;"><input type="checkbox" id="vote-anonymous" checked> Анонімне голосування</label>
         </div>
+
+        <label class="field-label">Повторення</label>
+        <select id="vote-recurrence" onchange="onVoteRecurrenceChange()" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+          <option value="none">Не повторювати (надіслати зараз один раз)</option>
+          <option value="2days">Кожні 2 дні</option>
+          <option value="week">Раз на тиждень</option>
+          <option value="month">Раз на місяць</option>
+          <option value="date">На конкретну дату</option>
+        </select>
+        <div id="vote-date-box" class="hidden">
+          <label class="field-label">Дата</label>
+          <input type="date" id="vote-date">
+        </div>
+
         <label class="field-label">Telegram-групи</label>
         <div id="vote-branch-list" style="max-height:220px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
         <div id="vote-error" class="error-box hidden"></div>
@@ -483,22 +497,32 @@
       </div>
 
       <div class="section-block">
-        <h3>Останні голосування</h3>
-        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">"Дублювати" підставить тему й варіанти в форму вище — залишиться перевірити й натиснути "Надіслати" ще раз.</p>
+        <h3>📋 Останні голосування</h3>
+        <p style="font-size:12.5px;color:var(--muted);margin:0 0 10px;">"Дублювати" підставить тему й варіанти в форму вище. Якщо голосування повторюване і настав час — карта підсвітиться, натисни "Надіслати зараз".</p>
         <div id="poll-history-list"></div>
       </div>
     </section>
 
     <section id="view-reminders" class="view">
-      <h1 class="page-title">Нагадування</h1>
-      <p class="page-sub">Особисті нагадування, що періодично повертаються</p>
-      <div class="section-block">
-        <label class="field-label" style="margin-top:0;">Текст нагадування</label>
+      <h1 class="page-title">🔔 Нагадування</h1>
+      <p class="page-sub">Особисті пости-нагадування, що періодично повертаються</p>
+      <div class="section-block" style="border-top:3px solid #8A5CA8;">
+        <label class="field-label" style="margin-top:0;">Заголовок</label>
         <input type="text" id="rem-text" placeholder="Наприклад: Перевірити звіт по касах">
+        <label class="field-label">Опис (необов'язково)</label>
+        <textarea id="rem-desc" rows="3" placeholder="Додаткові деталі, що саме треба зробити"></textarea>
+        <label class="field-label">Фото (необов'язково)</label>
+        <div id="rem-image-preview-wrap" class="hidden" style="margin-top:6px;">
+          <img id="rem-image-preview" style="max-width:140px;border-radius:8px;border:1.5px solid var(--border);display:block;">
+          <button class="btn-ghost" style="margin-top:6px;padding:5px 10px;font-size:11.5px;" onclick="clearReminderImage()">Прибрати фото</button>
+        </div>
+        <input type="file" accept="image/*" id="rem-image-input" class="hidden" onchange="handleReminderImagePick(event)">
+        <button class="btn-ghost" style="margin-top:6px;" onclick="document.getElementById('rem-image-input').click()">📷 Додати фото</button>
         <label class="field-label">Повторювати кожні</label>
         <select id="rem-interval" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
           <option value="1">День</option>
           <option value="7" selected>Тиждень</option>
+          <option value="14">2 тижні</option>
           <option value="30">Місяць</option>
         </select>
         <div class="btn-submit-row"><button class="btn-primary" onclick="addReminder()">+ Додати нагадування</button></div>
@@ -1566,10 +1590,25 @@ function startVoting() {
   document.getElementById('vote-question').value = '';
   document.getElementById('vote-multiple').checked = false;
   document.getElementById('vote-anonymous').checked = true;
+  document.getElementById('vote-recurrence').value = 'none';
+  document.getElementById('vote-date-box').classList.add('hidden');
+  document.getElementById('vote-date').value = '';
   document.getElementById('vote-error').classList.add('hidden');
   document.getElementById('vote-success').classList.add('hidden');
   renderVoteGroupList();
   startPollHistory();
+}
+
+function onVoteRecurrenceChange() {
+  const val = document.getElementById('vote-recurrence').value;
+  document.getElementById('vote-date-box').classList.toggle('hidden', val !== 'date');
+}
+
+function recurrenceIntervalDays(type) {
+  return { '2days': 2, 'week': 7, 'month': 30 }[type] || null;
+}
+function recurrenceLabel(type) {
+  return { none: 'Без повторення', '2days': 'Кожні 2 дні', week: 'Раз на тиждень', month: 'Раз на місяць', date: 'На конкретну дату' }[type] || '';
 }
 
 function addVoteOption(prefillValue) {
@@ -1601,6 +1640,8 @@ async function submitVote() {
   const options = Array.from(document.querySelectorAll('.vote-option-input')).map(i => i.value.trim()).filter(v => v);
   const allowsMultiple = document.getElementById('vote-multiple').checked;
   const isAnonymous = document.getElementById('vote-anonymous').checked;
+  const recurrenceType = document.getElementById('vote-recurrence').value;
+  const customDate = document.getElementById('vote-date').value;
   const selectedGroupIds = Array.from(document.querySelectorAll('.vote-branch-check:checked')).map(el => el.value);
   const targets = selectedGroupIds.map(id => {
     const g = telegramGroupsCache.find(x => x.id === id);
@@ -1615,28 +1656,46 @@ async function submitVote() {
     errBox.classList.remove('hidden');
     return;
   }
+  if (recurrenceType === 'date' && !customDate) {
+    errBox.textContent = "Обери дату для запланованого голосування.";
+    errBox.classList.remove('hidden');
+    return;
+  }
 
   const btn = document.getElementById('btn-vote');
   btn.disabled = true; btn.textContent = "Надсилаю...";
+
+  const sendNow = recurrenceType !== 'date' || new Date(customDate) <= new Date();
+  const now = Date.now();
+  let nextSendAt = null;
+  const intervalDays = recurrenceIntervalDays(recurrenceType);
+  if (recurrenceType === 'date') nextSendAt = new Date(customDate + 'T09:00:00').getTime();
+  else if (intervalDays) nextSendAt = now + intervalDays * 86400000;
+
   try {
-    await fetch(MAIL_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        type: 'telegram_poll',
-        targets: targets,
-        question: question,
-        options: options,
-        allowsMultiple: allowsMultiple,
-        isAnonymous: isAnonymous
-      })
-    });
+    if (sendNow) {
+      await fetch(MAIL_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          type: 'telegram_poll',
+          targets: targets,
+          question: question,
+          options: options,
+          allowsMultiple: allowsMultiple,
+          isAnonymous: isAnonymous
+        })
+      });
+    }
     await pollsRef.add({
       question: question, options: options, allowsMultiple: allowsMultiple, isAnonymous: isAnonymous,
-      groupIds: selectedGroupIds, createdBy: currentUser.uid, createdByName: currentUserDoc.name, createdAt: Date.now()
+      groupIds: selectedGroupIds, recurrenceType: recurrenceType,
+      lastSentAt: sendNow ? now : null,
+      nextSendAt: nextSendAt,
+      createdBy: currentUser.uid, createdByName: currentUserDoc.name, createdAt: now
     });
-    okBox.textContent = "Голосування надіслано в " + targets.length + " груп(и).";
+    okBox.textContent = sendNow ? ("Голосування надіслано в " + targets.length + " груп(и).") : "Заплановано на " + customDate + ".";
     okBox.classList.remove('hidden');
   } catch (e) {
     errBox.textContent = "Не вдалося надіслати: " + e.message;
@@ -1663,11 +1722,56 @@ function renderPollHistory() {
   const box = document.getElementById('poll-history-list');
   if (!box) return;
   if (pollsCache.length === 0) { box.innerHTML = '<div class="empty-note">Ще не було голосувань</div>'; return; }
+  const now = Date.now();
   box.innerHTML = pollsCache.map(p => {
-    const groupNames = (p.groupIds || []).map(id => { const g = telegramGroupsCache.find(x => x.id === id); return g ? g.name : '?'; }).join(', ');
-    return '<div class="team-row" style="flex-wrap:wrap;"><div class="team-row-info"><div class="user-avatar" style="background:#229ED9;">📊</div><div><div class="team-row-name">' + escapeHtml(p.question) + '</div><div class="team-row-email">' + (p.options || []).length + ' варіант(и) · ' + escapeHtml(groupNames || 'без групи') + '</div></div></div>' +
-      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="duplicatePoll(&quot;' + p.id + '&quot;)">Дублювати</button></div></div>';
+    const groupNames = (p.groupIds || []).map(id => { const g = telegramGroupsCache.find(x => x.id === id); return g ? g.name : null; }).filter(Boolean).join(', ');
+    const recType = p.recurrenceType || 'none';
+    const isDue = recType !== 'none' && p.nextSendAt && p.nextSendAt <= now;
+    const optionsPreview = (p.options || []).join(' · ');
+    return '<div class="team-row" style="flex-wrap:wrap;align-items:flex-start;' + (isDue ? 'border-color:#C98A2E;background:#C98A2E11;' : '') + '">' +
+      '<div class="team-row-info" style="align-items:flex-start;">' +
+        '<div class="user-avatar" style="background:' + (isDue ? '#C98A2E' : '#229ED9') + ';">' + (isDue ? '⏰' : '📊') + '</div>' +
+        '<div>' +
+          '<div class="team-row-name">' + escapeHtml(p.question) + (isDue ? ' <span class="role-tag" style="background:#C98A2E;color:#fff;">ЧАС НАДІСЛАТИ</span>' : '') + '</div>' +
+          '<div class="team-row-email" style="margin-top:2px;">' + escapeHtml(optionsPreview) + '</div>' +
+          '<div class="team-row-email" style="margin-top:2px;">✈️ ' + escapeHtml(groupNames || 'без групи') + (recType !== 'none' ? ' · 🔁 ' + recurrenceLabel(recType) : '') + '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        (recType !== 'none' ? '<button class="btn-primary" style="padding:6px 12px;font-size:11.5px;" onclick="resendPollNow(&quot;' + p.id + '&quot;)">Надіслати зараз</button>' : '') +
+        '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="duplicatePoll(&quot;' + p.id + '&quot;)">Дублювати</button>' +
+        '<button class="btn-delete" onclick="deletePoll(&quot;' + p.id + '&quot;)">✕</button>' +
+      '</div></div>';
   }).join('');
+}
+
+async function resendPollNow(id) {
+  const p = pollsCache.find(x => x.id === id);
+  if (!p) return;
+  const targets = (p.groupIds || []).map(gid => {
+    const g = telegramGroupsCache.find(x => x.id === gid);
+    return g ? { chatId: g.chatId, threadId: g.threadId || null } : null;
+  }).filter(Boolean);
+  if (targets.length === 0) { alert('Жодна прив\u2019язана група більше не існує.'); return; }
+  try {
+    await fetch(MAIL_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ type: 'telegram_poll', targets: targets, question: p.question, options: p.options, allowsMultiple: p.allowsMultiple, isAnonymous: p.isAnonymous })
+    });
+    const now = Date.now();
+    const intervalDays = recurrenceIntervalDays(p.recurrenceType);
+    const update = { lastSentAt: now };
+    if (intervalDays) update.nextSendAt = now + intervalDays * 86400000;
+    else update.nextSendAt = null;
+    await pollsRef.doc(id).update(update);
+  } catch (e) { alert('Не вдалося надіслати: ' + e.message); }
+}
+
+async function deletePoll(id) {
+  if (!confirm('Видалити це голосування зі списку? (у самому Telegram воно лишиться, видаляється тільки запис тут)')) return;
+  await pollsRef.doc(id).delete();
 }
 
 function duplicatePoll(id) {
@@ -1692,7 +1796,12 @@ function duplicatePoll(id) {
 // ======= REMINDERS =======
 const remindersRef = db.collection('reminders');
 let unsubscribeReminders = null;
+let pendingReminderImage = null;
+
 function startReminders() {
+  clearReminderImage();
+  document.getElementById('rem-text').value = '';
+  document.getElementById('rem-desc').value = '';
   if (unsubscribeReminders) unsubscribeReminders();
   unsubscribeReminders = remindersRef.where('createdBy', '==', currentUser.uid).onSnapshot(snapshot => {
     const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.lastResetAt - b.lastResetAt);
@@ -1706,18 +1815,52 @@ function renderReminders(items) {
   const now = Date.now();
   box.innerHTML = items.map(r => {
     const due = (now - r.lastResetAt) >= r.intervalDays * 86400000;
-    const label = r.intervalDays === 1 ? 'щодня' : r.intervalDays === 7 ? 'щотижня' : r.intervalDays === 30 ? 'щомісяця' : ('кожні ' + r.intervalDays + ' дн.');
-    return '<div class="team-row" style="' + (due ? 'border-color:#B4482F;background:#B4482F11;' : '') + '"><div class="team-row-info"><div class="user-avatar" style="background:' + (due ? '#B4482F' : '#3B8C82') + ';">🔔</div><div><div class="team-row-name">' + escapeHtml(r.text) + (due ? ' <span class="role-tag" style="background:#B4482F;color:#fff;">ЧАС!</span>' : '') + '</div><div class="team-row-email">Повтор: ' + label + '</div></div></div>' +
+    const label = r.intervalDays === 1 ? 'щодня' : r.intervalDays === 7 ? 'щотижня' : r.intervalDays === 14 ? 'кожні 2 тижні' : r.intervalDays === 30 ? 'щомісяця' : ('кожні ' + r.intervalDays + ' дн.');
+    const imgHtml = r.image ? '<img src="' + r.image + '" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;display:block;object-fit:cover;">' : '';
+    return '<div class="team-row" style="flex-wrap:wrap;align-items:flex-start;' + (due ? 'border-color:#B4482F;background:#B4482F11;' : '') + '">' +
+      '<div class="team-row-info" style="align-items:flex-start;flex:1;">' +
+      '<div class="user-avatar" style="background:' + (due ? '#B4482F' : '#8A5CA8') + ';">🔔</div>' +
+      '<div style="flex:1;">' +
+      '<div class="team-row-name">' + escapeHtml(r.text) + (due ? ' <span class="role-tag" style="background:#B4482F;color:#fff;">ЧАС!</span>' : '') + '</div>' +
+      (r.desc ? '<div class="team-row-email" style="margin-top:2px;">' + escapeHtml(r.desc) + '</div>' : '') +
+      '<div class="team-row-email" style="margin-top:2px;">Повтор: ' + label + '</div>' +
+      imgHtml +
+      '</div></div>' +
       '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">Скинути</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
   }).join('');
 }
 
+async function handleReminderImagePick(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  try {
+    const dataUrl = await readAndCompressImage(file);
+    if (dataUrl.length > 700000) { alert('Фото занадто велике. Спробуй інше.'); event.target.value = ''; return; }
+    pendingReminderImage = dataUrl;
+    document.getElementById('rem-image-preview').src = dataUrl;
+    document.getElementById('rem-image-preview-wrap').classList.remove('hidden');
+  } catch (e) { alert('Не вдалося обробити фото: ' + e.message); }
+}
+
+function clearReminderImage() {
+  pendingReminderImage = null;
+  const input = document.getElementById('rem-image-input');
+  if (input) input.value = '';
+  const wrap = document.getElementById('rem-image-preview-wrap');
+  if (wrap) wrap.classList.add('hidden');
+}
+
 async function addReminder() {
   const text = document.getElementById('rem-text').value.trim();
+  const desc = document.getElementById('rem-desc').value.trim();
   const intervalDays = parseInt(document.getElementById('rem-interval').value, 10);
   if (!text) return;
-  await remindersRef.add({ text: text, intervalDays: intervalDays, lastResetAt: Date.now(), createdBy: currentUser.uid, createdAt: Date.now() });
+  const data = { text: text, desc: desc, intervalDays: intervalDays, lastResetAt: Date.now(), createdBy: currentUser.uid, createdAt: Date.now() };
+  if (pendingReminderImage) data.image = pendingReminderImage;
+  await remindersRef.add(data);
   document.getElementById('rem-text').value = '';
+  document.getElementById('rem-desc').value = '';
+  clearReminderImage();
 }
 
 async function resetReminder(id) { await remindersRef.doc(id).update({ lastResetAt: Date.now() }); }
@@ -2105,6 +2248,7 @@ function startBranchesGlobal() {
     telegramGroupsCache.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
     renderTelegramGroupsList();
     renderVoteGroupList();
+    renderPollHistory();
   });
 }
 
