@@ -530,6 +530,7 @@
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input type="text" id="new-tg-name" placeholder="Назва (напр. Загальна група)" style="flex:1;min-width:160px;margin:0;">
           <input type="text" id="new-tg-chatid" placeholder="Chat ID (напр. -1001234567890)" style="flex:1;min-width:180px;margin:0;">
+          <input type="text" id="new-tg-threadid" placeholder="ID гілки/теми (необов'язково)" style="flex:1;min-width:160px;margin:0;">
           <button class="btn-primary" onclick="addTelegramGroup()">+ Додати групу</button>
         </div>
         <div id="tg-group-error" class="error-box hidden"></div>
@@ -1601,15 +1602,15 @@ async function submitVote() {
   const allowsMultiple = document.getElementById('vote-multiple').checked;
   const isAnonymous = document.getElementById('vote-anonymous').checked;
   const selectedGroupIds = Array.from(document.querySelectorAll('.vote-branch-check:checked')).map(el => el.value);
-  const chatIds = selectedGroupIds.map(id => {
+  const targets = selectedGroupIds.map(id => {
     const g = telegramGroupsCache.find(x => x.id === id);
-    return g ? g.chatId : null;
+    return g ? { chatId: g.chatId, threadId: g.threadId || null } : null;
   }).filter(Boolean);
   const errBox = document.getElementById('vote-error');
   const okBox = document.getElementById('vote-success');
   errBox.classList.add('hidden'); okBox.classList.add('hidden');
 
-  if (!question || options.length < 2 || chatIds.length === 0) {
+  if (!question || options.length < 2 || targets.length === 0) {
     errBox.textContent = "Впиши тему, щонайменше 2 варіанти і обери хоча б одну групу.";
     errBox.classList.remove('hidden');
     return;
@@ -1624,7 +1625,7 @@ async function submitVote() {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         type: 'telegram_poll',
-        chatIds: chatIds,
+        targets: targets,
         question: question,
         options: options,
         allowsMultiple: allowsMultiple,
@@ -1635,7 +1636,7 @@ async function submitVote() {
       question: question, options: options, allowsMultiple: allowsMultiple, isAnonymous: isAnonymous,
       groupIds: selectedGroupIds, createdBy: currentUser.uid, createdByName: currentUserDoc.name, createdAt: Date.now()
     });
-    okBox.textContent = "Голосування надіслано в " + chatIds.length + " груп(и).";
+    okBox.textContent = "Голосування надіслано в " + targets.length + " груп(и).";
     okBox.classList.remove('hidden');
   } catch (e) {
     errBox.textContent = "Не вдалося надіслати: " + e.message;
@@ -2118,21 +2119,23 @@ function renderTelegramGroupsList() {
     return;
   }
   box.innerHTML = telegramGroupsCache.map(g =>
-    '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#229ED9;">✈️</div><div><div class="team-row-name">' + escapeHtml(g.name) + '</div><div class="team-row-email">' + escapeHtml(g.chatId) + '</div></div></div><button class="btn-delete" onclick="deleteTelegramGroup(&quot;' + g.id + '&quot;)">✕</button></div>'
+    '<div class="team-row"><div class="team-row-info"><div class="user-avatar" style="background:#229ED9;">✈️</div><div><div class="team-row-name">' + escapeHtml(g.name) + '</div><div class="team-row-email">' + escapeHtml(g.chatId) + (g.threadId ? ' · гілка ' + escapeHtml(g.threadId) : '') + '</div></div></div><button class="btn-delete" onclick="deleteTelegramGroup(&quot;' + g.id + '&quot;)">✕</button></div>'
   ).join('');
 }
 
 async function addTelegramGroup() {
   const nameInput = document.getElementById('new-tg-name');
   const chatInput = document.getElementById('new-tg-chatid');
+  const threadInput = document.getElementById('new-tg-threadid');
   const name = nameInput.value.trim();
   const chatId = chatInput.value.trim();
+  const threadId = threadInput.value.trim();
   const errBox = document.getElementById('tg-group-error');
   errBox.classList.add('hidden');
   if (!name || !chatId) { errBox.textContent = "Впиши назву і Chat ID."; errBox.classList.remove('hidden'); return; }
   try {
-    await telegramGroupsRef.add({ name: name, chatId: chatId, createdAt: Date.now() });
-    nameInput.value = ''; chatInput.value = '';
+    await telegramGroupsRef.add({ name: name, chatId: chatId, threadId: threadId || null, createdAt: Date.now() });
+    nameInput.value = ''; chatInput.value = ''; threadInput.value = '';
   } catch (e) { errBox.textContent = "Не вдалося додати: " + e.message; errBox.classList.remove('hidden'); }
 }
 
