@@ -531,6 +531,9 @@
           <div><label class="field-label" style="margin-top:16px;">Час</label><input type="time" id="rem-deadline-time" value="09:00"></div>
         </div>
         <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Якщо не вкажеш дедлайн — відлік почнеться з моменту створення, за обраний період повторення.</p>
+        <label class="field-label">Telegram-групи (необов'язково)</label>
+        <div id="rem-group-list" style="max-height:180px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:8px;margin-top:6px;"></div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Обери, якщо хочеш мати можливість надіслати це нагадування в Telegram (кнопкою на картці нижче).</p>
         <div class="btn-submit-row"><button class="btn-primary" onclick="addReminder()">+ Додати нагадування</button></div>
       </div>
       <div class="section-block">
@@ -1804,17 +1807,34 @@ const remindersRef = db.collection('reminders');
 let unsubscribeReminders = null;
 let pendingReminderImage = null;
 
+let remindersCache = [];
+
 function startReminders() {
   clearReminderImage();
   document.getElementById('rem-text').value = '';
   document.getElementById('rem-desc').value = '';
   document.getElementById('rem-deadline-date').value = '';
   document.getElementById('rem-deadline-time').value = '09:00';
+  renderReminderGroupList();
   if (unsubscribeReminders) unsubscribeReminders();
   unsubscribeReminders = remindersRef.where('createdBy', '==', currentUser.uid).onSnapshot(snapshot => {
-    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
-    renderReminders(items);
+    remindersCache = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
+    renderReminders(remindersCache);
   });
+}
+
+function renderReminderGroupList() {
+  const box = document.getElementById('rem-group-list');
+  if (!box) return;
+  if (telegramGroupsCache.length === 0) {
+    box.innerHTML = '<div class="empty-note">Ще немає жодної Telegram-групи (додай у "Працівники → Telegram-групи")</div>';
+    return;
+  }
+  box.innerHTML = telegramGroupsCache.map(g =>
+    '<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:pointer;">' +
+    '<input type="checkbox" class="rem-group-check" value="' + g.id + '"> ✈️ ' + escapeHtml(g.name) +
+    '</label>'
+  ).join('');
 }
 
 function intervalLabel(days) {
@@ -1846,6 +1866,8 @@ function renderReminders(items) {
     const remaining = timeUntil(dueAt);
     const whenText = due ? 'Настав час!' : ('До: ' + formatDueDate(dueAt) + (remaining ? ' (' + remaining + ')' : ''));
     const imgHtml = r.image ? '<img src="' + r.image + '" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;display:block;object-fit:cover;">' : '';
+    const groupNames = (r.groupIds || []).map(id => { const g = telegramGroupsCache.find(x => x.id === id); return g ? g.name : null; }).filter(Boolean).join(', ');
+    const hasGroups = (r.groupIds || []).length > 0;
     return '<div class="team-row" style="flex-wrap:wrap;align-items:flex-start;' + (due ? 'border-color:#B4482F;background:#B4482F11;' : '') + '">' +
       '<div class="team-row-info" style="align-items:flex-start;flex:1;">' +
       '<div class="user-avatar" style="background:' + (due ? '#B4482F' : '#8A5CA8') + ';">🔔</div>' +
@@ -1854,10 +1876,37 @@ function renderReminders(items) {
       (r.desc ? '<div class="team-row-email" style="margin-top:2px;">' + escapeHtml(r.desc) + '</div>' : '') +
       '<div class="team-row-email" style="margin-top:2px;font-weight:700;color:' + (due ? '#B4482F' : 'var(--ink)') + ';">📅 ' + whenText + '</div>' +
       '<div class="team-row-email" style="margin-top:2px;">Повтор: ' + intervalLabel(r.intervalDays) + '</div>' +
+      (hasGroups ? '<div class="team-row-email" style="margin-top:2px;">✈️ ' + escapeHtml(groupNames) + '</div>' : '') +
       imgHtml +
       '</div></div>' +
-      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">' + (r.intervalDays === 0 ? 'Виконано' : 'Скинути') + '</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+      (hasGroups ? '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="sendReminderToTelegram(&quot;' + r.id + '&quot;)">📤 Надіслати в Telegram</button>' : '') +
+      '<button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">' + (r.intervalDays === 0 ? 'Виконано' : 'Скинути') + '</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
   }).join('');
+}
+
+async function sendReminderToTelegram(id) {
+  const r = remindersCache.find(x => x.id === id);
+  if (!r) return;
+  const targets = (r.groupIds || []).map(gid => {
+    const g = telegramGroupsCache.find(x => x.id === gid);
+    return g ? { chatId: g.chatId, threadId: g.threadId || null } : null;
+  }).filter(Boolean);
+  if (targets.length === 0) { alert('Жодна прив\u2019язана група більше не існує.'); return; }
+  try {
+    await fetch(MAIL_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        type: 'telegram_message',
+        targets: targets,
+        text: r.text + (r.desc ? '\n\n' + r.desc : ''),
+        image: r.image || null
+      })
+    });
+    showMailToast('📤 Нагадування надіслано в Telegram', false);
+  } catch (e) { alert('Не вдалося надіслати: ' + e.message); }
 }
 
 async function handleReminderImagePick(event) {
@@ -1899,13 +1948,16 @@ async function addReminder() {
     return;
   }
 
-  const data = { text: text, desc: desc, intervalDays: intervalDays, dueAt: dueAt, lastResetAt: now, createdBy: currentUser.uid, createdAt: now };
+  const groupIds = Array.from(document.querySelectorAll('.rem-group-check:checked')).map(el => el.value);
+
+  const data = { text: text, desc: desc, intervalDays: intervalDays, dueAt: dueAt, lastResetAt: now, groupIds: groupIds, createdBy: currentUser.uid, createdAt: now };
   if (pendingReminderImage) data.image = pendingReminderImage;
   await remindersRef.add(data);
   document.getElementById('rem-text').value = '';
   document.getElementById('rem-desc').value = '';
   document.getElementById('rem-deadline-date').value = '';
   document.getElementById('rem-deadline-time').value = '09:00';
+  document.querySelectorAll('.rem-group-check').forEach(el => el.checked = false);
   clearReminderImage();
 }
 
@@ -2303,6 +2355,8 @@ function startBranchesGlobal() {
     renderTelegramGroupsList();
     renderVoteGroupList();
     renderPollHistory();
+    renderReminderGroupList();
+    renderReminders(remindersCache);
   });
 }
 
