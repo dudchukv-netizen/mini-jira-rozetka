@@ -520,11 +520,17 @@
         <button class="btn-ghost" style="margin-top:6px;" onclick="document.getElementById('rem-image-input').click()">📷 Додати фото</button>
         <label class="field-label">Повторювати кожні</label>
         <select id="rem-interval" style="width:100%;padding:11px 12px;margin:6px 0 0;border:1.5px solid var(--border);border-radius:6px;font-size:14px;background:var(--content-bg);color:var(--ink);">
+          <option value="0">Без повторення (одноразово)</option>
           <option value="1">День</option>
           <option value="7" selected>Тиждень</option>
           <option value="14">2 тижні</option>
           <option value="30">Місяць</option>
         </select>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;">
+          <div><label class="field-label" style="margin-top:16px;">Дедлайн — дата (необов'язково)</label><input type="date" id="rem-deadline-date"></div>
+          <div><label class="field-label" style="margin-top:16px;">Час</label><input type="time" id="rem-deadline-time" value="09:00"></div>
+        </div>
+        <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0;">Якщо не вкажеш дедлайн — відлік почнеться з моменту створення, за обраний період повторення.</p>
         <div class="btn-submit-row"><button class="btn-primary" onclick="addReminder()">+ Додати нагадування</button></div>
       </div>
       <div class="section-block">
@@ -1802,11 +1808,32 @@ function startReminders() {
   clearReminderImage();
   document.getElementById('rem-text').value = '';
   document.getElementById('rem-desc').value = '';
+  document.getElementById('rem-deadline-date').value = '';
+  document.getElementById('rem-deadline-time').value = '09:00';
   if (unsubscribeReminders) unsubscribeReminders();
   unsubscribeReminders = remindersRef.where('createdBy', '==', currentUser.uid).onSnapshot(snapshot => {
-    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.lastResetAt - b.lastResetAt);
+    const items = snapshot.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.dueAt || 0) - (b.dueAt || 0));
     renderReminders(items);
   });
+}
+
+function intervalLabel(days) {
+  return days === 0 ? 'без повторення' : days === 1 ? 'щодня' : days === 7 ? 'щотижня' : days === 14 ? 'кожні 2 тижні' : days === 30 ? 'щомісяця' : ('кожні ' + days + ' дн.');
+}
+
+function formatDueDate(ts) {
+  const d = new Date(ts);
+  return d.toLocaleDateString('uk-UA') + ' о ' + d.toLocaleTimeString('uk-UA', { hour: '2-digit', minute: '2-digit' });
+}
+
+function timeUntil(ts) {
+  const diffMs = ts - Date.now();
+  if (diffMs <= 0) return null;
+  const days = Math.floor(diffMs / 86400000);
+  const hours = Math.floor((diffMs % 86400000) / 3600000);
+  if (days > 0) return 'лишилось ' + days + ' дн.' + (hours > 0 ? ' ' + hours + ' год.' : '');
+  if (hours > 0) return 'лишилось ' + hours + ' год.';
+  return 'менше години';
 }
 
 function renderReminders(items) {
@@ -1814,8 +1841,10 @@ function renderReminders(items) {
   if (items.length === 0) { box.innerHTML = '<div class="empty-note">Ще немає нагадувань</div>'; return; }
   const now = Date.now();
   box.innerHTML = items.map(r => {
-    const due = (now - r.lastResetAt) >= r.intervalDays * 86400000;
-    const label = r.intervalDays === 1 ? 'щодня' : r.intervalDays === 7 ? 'щотижня' : r.intervalDays === 14 ? 'кожні 2 тижні' : r.intervalDays === 30 ? 'щомісяця' : ('кожні ' + r.intervalDays + ' дн.');
+    const dueAt = r.dueAt || (r.lastResetAt + r.intervalDays * 86400000);
+    const due = dueAt <= now;
+    const remaining = timeUntil(dueAt);
+    const whenText = due ? 'Настав час!' : ('До: ' + formatDueDate(dueAt) + (remaining ? ' (' + remaining + ')' : ''));
     const imgHtml = r.image ? '<img src="' + r.image + '" style="max-width:100%;max-height:160px;border-radius:8px;margin-top:8px;display:block;object-fit:cover;">' : '';
     return '<div class="team-row" style="flex-wrap:wrap;align-items:flex-start;' + (due ? 'border-color:#B4482F;background:#B4482F11;' : '') + '">' +
       '<div class="team-row-info" style="align-items:flex-start;flex:1;">' +
@@ -1823,10 +1852,11 @@ function renderReminders(items) {
       '<div style="flex:1;">' +
       '<div class="team-row-name">' + escapeHtml(r.text) + (due ? ' <span class="role-tag" style="background:#B4482F;color:#fff;">ЧАС!</span>' : '') + '</div>' +
       (r.desc ? '<div class="team-row-email" style="margin-top:2px;">' + escapeHtml(r.desc) + '</div>' : '') +
-      '<div class="team-row-email" style="margin-top:2px;">Повтор: ' + label + '</div>' +
+      '<div class="team-row-email" style="margin-top:2px;font-weight:700;color:' + (due ? '#B4482F' : 'var(--ink)') + ';">📅 ' + whenText + '</div>' +
+      '<div class="team-row-email" style="margin-top:2px;">Повтор: ' + intervalLabel(r.intervalDays) + '</div>' +
       imgHtml +
       '</div></div>' +
-      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">Скинути</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
+      '<div style="display:flex;gap:8px;"><button class="btn-ghost" style="padding:6px 10px;font-size:11.5px;" onclick="resetReminder(&quot;' + r.id + '&quot;)">' + (r.intervalDays === 0 ? 'Виконано' : 'Скинути') + '</button><button class="btn-delete" onclick="deleteReminder(&quot;' + r.id + '&quot;)">✕</button></div></div>';
   }).join('');
 }
 
@@ -1854,16 +1884,40 @@ async function addReminder() {
   const text = document.getElementById('rem-text').value.trim();
   const desc = document.getElementById('rem-desc').value.trim();
   const intervalDays = parseInt(document.getElementById('rem-interval').value, 10);
+  const deadlineDate = document.getElementById('rem-deadline-date').value;
+  const deadlineTime = document.getElementById('rem-deadline-time').value || '09:00';
   if (!text) return;
-  const data = { text: text, desc: desc, intervalDays: intervalDays, lastResetAt: Date.now(), createdBy: currentUser.uid, createdAt: Date.now() };
+
+  const now = Date.now();
+  let dueAt;
+  if (deadlineDate) {
+    dueAt = new Date(deadlineDate + 'T' + deadlineTime + ':00').getTime();
+  } else if (intervalDays > 0) {
+    dueAt = now + intervalDays * 86400000;
+  } else {
+    alert('Вкажи дедлайн або обери повторення (не можна лишити обидва порожніми).');
+    return;
+  }
+
+  const data = { text: text, desc: desc, intervalDays: intervalDays, dueAt: dueAt, lastResetAt: now, createdBy: currentUser.uid, createdAt: now };
   if (pendingReminderImage) data.image = pendingReminderImage;
   await remindersRef.add(data);
   document.getElementById('rem-text').value = '';
   document.getElementById('rem-desc').value = '';
+  document.getElementById('rem-deadline-date').value = '';
+  document.getElementById('rem-deadline-time').value = '09:00';
   clearReminderImage();
 }
 
-async function resetReminder(id) { await remindersRef.doc(id).update({ lastResetAt: Date.now() }); }
+async function resetReminder(id) {
+  const box = document.getElementById('reminders-list');
+  const snap = await remindersRef.doc(id).get();
+  const r = snap.data();
+  if (!r) return;
+  if (r.intervalDays === 0) { await remindersRef.doc(id).delete(); return; }
+  const now = Date.now();
+  await remindersRef.doc(id).update({ lastResetAt: now, dueAt: now + r.intervalDays * 86400000 });
+}
 async function deleteReminder(id) { await remindersRef.doc(id).delete(); }
 
 async function archiveTask(id) {
